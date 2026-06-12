@@ -1,0 +1,1668 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Interactive Nashville neighborhood intelligence map with historical shifts, future scenarios, opportunity rankings, and address-level research nodes." />
+  <meta name="theme-color" content="#15201d" />
+  <meta property="og:title" content="Nash / Shift — Nashville Neighborhood Intelligence" />
+  <meta property="og:description" content="Explore Nashville neighborhood change, pressure, and modeled opportunity from 1980 to 2035." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="./assets/preview.png" />
+  <title>Nash / Shift — Nashville Neighborhood Intelligence</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2315201d'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='20' fill='%23d79a38'%3EN%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --ink: #15201d;
+      --paper: #f3efe5;
+      --paper-2: #e7e1d4;
+      --panel: #fbf8f0;
+      --line: #c9c1b1;
+      --muted: #6d746e;
+      --sage: #4e6b5d;
+      --sage-dark: #263e35;
+      --mint: #a8c6b6;
+      --amber: #d79a38;
+      --orange: #c86632;
+      --red: #a84a3f;
+      --blue: #6d91a2;
+      --shadow: 0 12px 35px rgba(26, 36, 32, 0.13);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      height: 100vh;
+      min-height: 720px;
+      display: grid;
+      grid-template-rows: 58px 1fr;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 235px 1fr auto;
+      align-items: center;
+      padding: 0 18px;
+      background: var(--ink);
+      color: var(--paper);
+      border-bottom: 1px solid #35433d;
+      z-index: 30;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      letter-spacing: .08em;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 13px;
+    }
+    .brand-mark {
+      width: 30px; height: 30px;
+      display: grid; place-items: center;
+      border: 1px solid #8ba092;
+      color: #dcb15f;
+      font-family: Georgia, serif;
+      font-size: 18px;
+    }
+    .brand small {
+      display: block;
+      margin-top: 2px;
+      font-weight: 400;
+      letter-spacing: .12em;
+      color: #9ba9a1;
+      font-size: 8px;
+    }
+    .top-modes {
+      display: flex;
+      justify-content: center;
+      height: 100%;
+    }
+    .mode-btn {
+      min-width: 108px;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: #aab5af;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .mode-btn.active {
+      color: #fff9eb;
+      border-bottom-color: var(--amber);
+      background: #1c2a25;
+    }
+    .header-actions { display: flex; gap: 8px; }
+    .top-button {
+      border: 1px solid #53665d;
+      background: transparent;
+      color: #e7e0d4;
+      padding: 8px 12px;
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .top-button.primary { background: var(--amber); color: var(--ink); border-color: var(--amber); font-weight: 700; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 225px minmax(580px, 1fr) 318px;
+      min-height: 0;
+    }
+
+    .sidebar, .detail-panel {
+      background: var(--panel);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      z-index: 10;
+    }
+    .sidebar { border-right: 1px solid var(--line); }
+    .detail-panel { border-left: 1px solid var(--line); }
+    .side-section { padding: 17px 16px; border-bottom: 1px solid var(--line); }
+    .section-kicker {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    .section-kicker span:last-child { color: var(--sage); }
+    .search {
+      width: 100%;
+      padding: 10px 10px;
+      border: 1px solid var(--line);
+      background: #fffdf7;
+      color: var(--ink);
+      outline: none;
+      font-size: 12px;
+    }
+    .search:focus { border-color: var(--sage); }
+
+    .metric-list { display: grid; gap: 4px; }
+    .metric-btn {
+      display: grid;
+      grid-template-columns: 14px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid transparent;
+      background: transparent;
+      padding: 9px 8px;
+      text-align: left;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .metric-btn:hover { background: var(--paper); }
+    .metric-btn.active { border-color: #9aae9f; background: #e6eee8; font-weight: 700; }
+    .metric-dot { width: 8px; height: 8px; background: var(--dot); }
+    .metric-btn .unit { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+
+    .scenario-card {
+      display: grid;
+      gap: 7px;
+      padding: 10px 0;
+      border-top: 1px solid #ddd6c8;
+    }
+    .scenario-card:first-of-type { border-top: 0; }
+    .optional-context summary {
+      cursor:pointer; list-style:none; color:var(--muted); font-size:9px; font-weight:700;
+      letter-spacing:.15em; text-transform:uppercase;
+    }
+    .optional-context summary::-webkit-details-marker { display:none; }
+    .optional-context summary::after { content:"+"; float:right; color:var(--sage); font-size:13px; line-height:.7; }
+    .optional-context[open] summary::after { content:"−"; }
+    .optional-context[open] summary { margin-bottom:12px; }
+    .scenario-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .scenario-name { font-weight: 700; font-size: 11px; }
+    .scenario-desc { color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .switch {
+      flex: 0 0 auto;
+      width: 29px; height: 16px;
+      border: 1px solid #8f978f;
+      background: #d3d0c7;
+      padding: 2px;
+      cursor: pointer;
+    }
+    .switch::after { content: ""; display: block; width: 10px; height: 10px; background: #fff; transition: transform .2s; }
+    .switch.on { background: var(--sage); border-color: var(--sage); }
+    .switch.on::after { transform: translateX(13px); }
+
+    .briefing {
+      min-height: 128px;
+      position: relative;
+      overflow: hidden;
+      color: white;
+      background-color: var(--sage-dark);
+      background-image: url("./assets/nashville-planning-aerial.png");
+      background-size: cover;
+      background-position: center;
+      padding: 13px;
+    }
+    .briefing::before { content:""; position:absolute; inset:0; background:rgba(18,32,27,.78); }
+    .briefing h3 { position:relative; margin: 32px 0 5px; max-width: 170px; font-family: Georgia, serif; font-weight: 400; font-size: 17px; line-height: 1.08; }
+    .briefing p { position:relative; margin: 0; color: #cbd4ce; font-size: 9px; line-height: 1.4; }
+    .briefing-tag { position:relative; display: inline-block; border: 1px solid rgba(255,255,255,.55); padding: 4px 6px; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+
+    .rank-list { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); }
+    .rank-item {
+      display:grid; grid-template-columns:22px 1fr auto; gap:7px; align-items:start;
+      border:0; background:#fffdf8; padding:8px; text-align:left; cursor:pointer;
+    }
+    .rank-item:hover { background:#edf2ed; }
+    .rank-num { color:var(--amber); font-family:Georgia,serif; font-size:17px; }
+    .rank-name { display:block; font-size:10px; font-weight:700; }
+    .rank-note { display:block; margin-top:2px; color:var(--muted); font-size:7px; }
+    .rank-reason { display:block; margin-top:4px; color:#4f5a54; font-size:7px; line-height:1.35; }
+    .rank-thesis { display:inline-block; margin-top:5px; padding:2px 4px; background:#e5ece7; color:var(--sage-dark); font-size:6px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    .rank-thesis.protect { background:#f0dfd6; color:#8b463b; }
+    .rank-score { color:var(--sage); font-family:Georgia,serif; font-size:17px; }
+
+    .map-shell {
+      min-width: 0;
+      position: relative;
+      overflow: hidden;
+      background: #d9d4c8;
+    }
+    .map-stage {
+      position: absolute;
+      inset: 0 0 188px;
+      overflow: hidden;
+      background-color: #d9d4c8;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 34 34'%3E%3Cpath d='M0 0H34M0 0V34' fill='none' stroke='%23cec8bc' stroke-width='1'/%3E%3Ccircle cx='17' cy='17' r='.7' fill='%23868c86'/%3E%3C/svg%3E");
+    }
+    .map-stage::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,.03);
+      pointer-events: none;
+    }
+    .map-topbar {
+      position: absolute;
+      z-index: 8;
+      left: 18px; top: 16px; right: 18px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+      pointer-events: none;
+    }
+    .year-card {
+      background: rgba(251,248,240,.95);
+      border: 1px solid #bdb5a7;
+      box-shadow: 0 8px 25px rgba(31,44,38,.13);
+      padding: 10px 12px;
+      pointer-events: auto;
+    }
+    .year-line { display: flex; align-items: baseline; gap: 8px; }
+    .year-number { font-family: Georgia, serif; font-size: 32px; line-height: 1; }
+    .year-status { padding: 3px 5px; background: var(--ink); color: white; font-size: 8px; text-transform: uppercase; letter-spacing: .1em; }
+    .year-sub { margin-top: 4px; color: var(--muted); font-size: 9px; }
+    .map-badge {
+      background: rgba(21,32,29,.9);
+      color: #f5efe2;
+      padding: 8px 10px;
+      font-size: 9px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      pointer-events: auto;
+    }
+    .map-badge strong { color: #e4ad52; }
+    #map-svg { width: 100%; height: 100%; display: block; }
+    #map-content { transform-origin: center; transition: transform .25s ease; }
+    .neighborhood {
+      stroke: #f4f0e6;
+      stroke-width: 2.2;
+      cursor: pointer;
+      transition: fill .25s, opacity .2s, stroke-width .2s, filter .2s;
+    }
+    .neighborhood:hover, .neighborhood.selected {
+      stroke: #192a24;
+      stroke-width: 4;
+      filter: drop-shadow(0 4px 4px rgba(20,31,27,.25));
+    }
+    .neighborhood.dimmed { opacity: .18; }
+    .map-label {
+      fill: #20302b;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .025em;
+      pointer-events: none;
+      paint-order: stroke;
+      stroke: rgba(247,243,233,.85);
+      stroke-width: 3px;
+    }
+    .map-value {
+      fill: #33463d;
+      font-size: 8px;
+      font-weight: 700;
+      pointer-events: none;
+      paint-order: stroke;
+      stroke: rgba(247,243,233,.8);
+      stroke-width: 2px;
+    }
+    .river { fill: none; stroke: #819eab; stroke-width: 45; stroke-linecap: round; opacity: .85; }
+    .river-line { fill: none; stroke: #aac2cb; stroke-width: 3; stroke-linecap: round; opacity: .9; }
+    .road { fill: none; stroke: #8f8d83; stroke-width: 3; stroke-dasharray: 9 5; opacity: .7; }
+    .road.major { stroke: #6d706a; stroke-width: 5; }
+    .rail { fill: none; stroke: #655f56; stroke-width: 2; stroke-dasharray: 2 5; opacity: .75; }
+    .project-line { fill: none; stroke: var(--amber); stroke-width: 5; stroke-dasharray: 7 6; opacity: 0; transition: opacity .2s; }
+    .project-line.show { opacity: .9; }
+    .project-node { fill: var(--amber); stroke: white; stroke-width: 2; opacity: 0; transition: opacity .2s; }
+    .project-node.show { opacity: 1; }
+    .north-arrow { position: absolute; right: 18px; bottom: 64px; z-index: 5; font-family: Georgia, serif; font-size: 11px; font-weight: 700; text-align: center; }
+    .north-arrow::before { content:""; display:block; margin:auto; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:15px solid var(--ink); }
+    .map-controls {
+      position: absolute;
+      right: 16px; top: 72px;
+      z-index: 10;
+      display: grid;
+      gap: 4px;
+    }
+    .map-control {
+      width: 34px; height: 34px;
+      border: 1px solid #a9a194;
+      background: rgba(251,248,240,.96);
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(33,44,39,.1);
+    }
+    .map-control:hover { background: #fff; }
+    .legend {
+      position: absolute;
+      left: 18px; bottom: 18px; z-index: 6;
+      padding: 8px 10px;
+      border: 1px solid #aea698;
+      background: rgba(251,248,240,.92);
+      font-size: 8px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .08em;
+    }
+    .legend-scale { display: flex; gap: 2px; margin: 5px 0 3px; }
+    .legend-scale i { width: 28px; height: 6px; display: block; }
+    .tooltip {
+      display: none;
+      position: absolute;
+      z-index: 20;
+      pointer-events: none;
+      min-width: 148px;
+      padding: 9px 10px;
+      background: var(--ink);
+      color: white;
+      box-shadow: var(--shadow);
+      font-size: 9px;
+    }
+    .tooltip strong { display: block; margin-bottom: 4px; font-family: Georgia, serif; font-size: 14px; font-weight: 400; }
+    .tooltip span { color: #d8b36c; font-weight: 700; }
+
+    #leaflet-map { position:absolute; inset:0; background:#15201d; z-index:1; }
+    .leaflet-container { font-family:"Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .leaflet-control-attribution {
+      background:rgba(18,27,24,.78) !important; color:#9faaa4 !important;
+      font-size:8px !important; letter-spacing:.03em;
+    }
+    .leaflet-control-attribution a { color:#d9a34a !important; }
+    .leaflet-control-zoom { display:none; }
+    .leaflet-tile-pane { filter:saturate(.55) contrast(1.05) brightness(.82); }
+	    .leaflet-tooltip.map-place-label {
+	      border:0; box-shadow:none; background:transparent; color:#fff;
+	      padding:0; font-size:10px; font-weight:700; letter-spacing:.025em;
+	      text-shadow:0 1px 3px #0b110f, 0 0 8px #0b110f;
+	    }
+	    .leaflet-tooltip.map-place-label::before { display:none; }
+	    .leaflet-tooltip.reference-label {
+	      border:1px solid rgba(215,208,194,.45); border-radius:0;
+	      background:rgba(18,27,24,.92); color:#f4ecdc;
+	      box-shadow:0 8px 22px rgba(0,0,0,.22); padding:5px 7px;
+	      font-size:8px; line-height:1.35;
+	    }
+	    .leaflet-tooltip.reference-label strong { display:block; color:#e4ad52; font-size:10px; margin-bottom:2px; }
+	    .leaflet-tooltip.reference-label::before { display:none; }
+	    .leaflet-tooltip.county-label {
+	      border:0; box-shadow:none; background:transparent; color:#b8c7c1;
+	      padding:0; font-size:9px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+	      text-shadow:0 1px 4px #0b110f, 0 0 10px #0b110f;
+	    }
+	    .leaflet-tooltip.county-label::before { display:none; }
+	    .leaflet-tooltip.corridor-label {
+	      border:1px solid #d29a3e; border-radius:0; background:#18231f; color:#f2d79f;
+	      box-shadow:0 5px 16px rgba(0,0,0,.25); padding:4px 6px;
+	      font-size:8px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+	    }
+    .leaflet-tooltip.corridor-label::before { display:none; }
+    .map-topbar, .map-controls, .legend, .north-arrow { z-index:1200; }
+    .compare-tray { z-index:1300; }
+    .map-stage::after {
+      content:""; position:absolute; inset:0; z-index:500; pointer-events:none;
+      box-shadow:inset 0 0 80px rgba(5,12,9,.18);
+    }
+    .map-badge { border-left:3px solid var(--amber); }
+    .map-readout {
+      position:absolute; left:18px; top:92px; z-index:1200;
+      display:grid; grid-template-columns:repeat(3,auto); gap:1px;
+      background:rgba(174,166,152,.45); box-shadow:0 8px 24px rgba(0,0,0,.2);
+    }
+    .map-readout div { background:rgba(20,31,27,.9); color:#bac5bf; padding:7px 9px; font-size:7px; letter-spacing:.09em; text-transform:uppercase; }
+    .map-readout strong { display:block; color:#f3ead9; margin-top:3px; font-size:10px; letter-spacing:0; }
+
+    .timeline {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 188px;
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+      z-index: 12;
+    }
+    .timeline-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+      padding: 0 18px;
+      border-bottom: 1px solid #d6cfc1;
+    }
+    .timeline-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+    .timeline-actions { display: flex; align-items: center; gap: 7px; }
+    .mini-button {
+      border: 1px solid #bdb5a7;
+      background: transparent;
+      padding: 5px 8px;
+      font-size: 8px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .mini-button.active { background: var(--ink); color: white; border-color: var(--ink); }
+    .timeline-inner { padding: 12px 18px; }
+    .slider-wrap { position: relative; margin: 5px 4px 0; }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--amber);
+      cursor: pointer;
+    }
+    .year-ticks { display: flex; justify-content: space-between; color: var(--muted); font-size: 8px; margin-top: 2px; }
+    .era-row { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 13px; border-top: 1px solid #c9c1b4; }
+    .era {
+      min-width: 0;
+      border-right: 1px solid #c9c1b4;
+      padding: 8px 10px 0;
+    }
+    .era:last-child { border-right: 0; }
+    .era-year { color: var(--sage); font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .era-text { margin-top: 3px; font-size: 9px; line-height: 1.3; }
+
+    .detail-hero {
+      padding: 18px 18px 14px;
+      color: white;
+      background: var(--sage-dark);
+      border-bottom: 4px solid var(--amber);
+    }
+    .eyebrow { font-size: 8px; letter-spacing: .16em; text-transform: uppercase; color: #b3c3b9; }
+    .detail-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 8px; }
+    .detail-hero h1 { margin: 0; font-family: Georgia, serif; font-size: 27px; line-height: 1; font-weight: 400; }
+    .detail-hero p { margin: 8px 0 0; color: #c7d1cb; font-size: 10px; line-height: 1.5; }
+    .score-ring {
+      flex: 0 0 auto;
+      width: 56px; height: 56px;
+      border: 1px solid #7d9488;
+      display: grid; place-items: center;
+      text-align: center;
+    }
+    .score-ring strong { display: block; color: #f1bc5a; font-family: Georgia, serif; font-size: 22px; line-height: .9; }
+    .score-ring span { color: #b6c4bc; font-size: 6px; letter-spacing: .1em; text-transform: uppercase; }
+    .detail-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 14px; }
+    .detail-action {
+      border: 1px solid #667e72;
+      background: transparent;
+      color: white;
+      padding: 7px;
+      font-size: 8px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .detail-action.active { background: var(--amber); color: var(--ink); border-color: var(--amber); }
+    .detail-section { padding: 15px 17px; border-bottom: 1px solid var(--line); }
+    .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); }
+    .metric-card { padding: 10px; min-height: 72px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fffdf8; }
+    .metric-card:nth-child(even) { border-right: 0; }
+    .metric-card:nth-last-child(-n+2) { border-bottom: 0; }
+    .metric-label { color: var(--muted); font-size: 7px; text-transform: uppercase; letter-spacing: .1em; }
+    .metric-value { margin-top: 5px; font-family: Georgia, serif; font-size: 18px; }
+    .metric-change { margin-top: 3px; color: var(--sage); font-size: 8px; font-weight: 700; }
+    .metric-change.warn { color: var(--red); }
+    .bar-list { display: grid; gap: 11px; }
+    .bar-row-top { display: flex; justify-content: space-between; font-size: 9px; }
+    .bar-track { height: 5px; background: #ded8cc; margin-top: 5px; }
+    .bar-fill { height: 100%; background: var(--sage); transition: width .25s; }
+    .bar-fill.amber { background: var(--amber); }
+    .bar-fill.red { background: var(--red); }
+    .catalyst-list { display: grid; gap: 8px; }
+    .catalyst {
+      display: grid;
+      grid-template-columns: 7px 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #ddd6c9;
+      font-size: 9px;
+      line-height: 1.35;
+    }
+    .catalyst:last-child { border-bottom: 0; padding-bottom: 0; }
+    .catalyst i { width: 7px; height: 7px; margin-top: 2px; background: var(--amber); }
+	    .catalyst b { font-size: 8px; color: var(--sage); text-transform: uppercase; letter-spacing: .08em; }
+	    .opportunity-case {
+	      padding:11px; border:1px solid #cabd9f; background:#f1eadc;
+	      color:#46514b; font-size:9px; line-height:1.5;
+	    }
+	    .opportunity-case > strong { display:block; margin-bottom:4px; color:var(--ink); font-family:Georgia,serif; font-size:15px; font-weight:400; }
+	    .driver-list { display:grid; gap:5px; margin-top:9px; }
+	    .driver {
+	      display:grid; grid-template-columns:18px 1fr; gap:7px; align-items:start;
+	      padding-top:6px; border-top:1px solid #d8ccb4;
+	    }
+	    .driver b { color:var(--sage); font-family:Georgia,serif; font-size:14px; font-weight:400; }
+	    .driver span { display:block; color:#4e5953; font-size:8px; line-height:1.4; }
+	    .driver-risk { margin-top:8px; padding:6px 7px; border-left:2px solid var(--red); background:#eaded5; color:#704b42; font-size:8px; line-height:1.4; }
+
+    .context-note {
+      padding:10px; margin-bottom:10px; border-left:3px solid var(--amber);
+      background:#efe8d8; color:#4e5752; font-size:8px; line-height:1.45;
+    }
+    .block-list { display:grid; gap:6px; }
+    .block-item {
+      width:100%; border:1px solid var(--line); background:#fffdf8; padding:8px;
+      display:grid; grid-template-columns:1fr auto; gap:8px; text-align:left; cursor:pointer;
+    }
+    .block-item:hover, .block-item.active { border-color:var(--amber); background:#f4eddf; }
+    .block-item strong { display:block; font-size:9px; }
+    .block-item span { display:block; margin-top:3px; color:var(--muted); font-size:7px; line-height:1.35; }
+    .block-score { color:var(--sage); font-family:Georgia,serif; font-size:17px; }
+    .leaflet-tooltip.context-label {
+      border:1px solid #b78949; border-radius:0; background:#201c17; color:#f3d29b;
+      box-shadow:0 5px 18px rgba(0,0,0,.35); padding:6px 8px; max-width:210px;
+      white-space:normal; font-size:8px; line-height:1.45;
+    }
+    .leaflet-tooltip.context-label::before { display:none; }
+    .leaflet-tooltip.block-label {
+      border:1px solid #d2a250; border-radius:0; background:#16231e; color:#f3eee3;
+      box-shadow:0 5px 18px rgba(0,0,0,.3); padding:6px 8px; font-size:8px; line-height:1.45;
+    }
+    .leaflet-tooltip.block-label::before { display:none; }
+
+    .compare-tray {
+      display: none;
+      position: absolute;
+      left: 18px; right: 18px; top: 86px;
+      z-index: 15;
+      padding: 12px;
+      background: var(--ink);
+      color: white;
+      box-shadow: var(--shadow);
+    }
+    .compare-tray.show { display: block; }
+    .compare-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:8px; text-transform:uppercase; letter-spacing:.1em; color:#abb9b1; }
+    .compare-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:#42534b; }
+    .compare-cell { background:#1b2924; padding:8px; font-size:8px; }
+    .compare-cell strong { display:block; color:#f0bb58; font-family:Georgia,serif; font-size:15px; font-weight:400; margin-top:3px; }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      z-index: 100;
+      place-items: center;
+      background: rgba(12,22,18,.65);
+    }
+    .modal-backdrop.show { display: grid; }
+    .modal {
+      width: min(520px, calc(100vw - 40px));
+      background: var(--panel);
+      box-shadow: 0 20px 70px rgba(0,0,0,.25);
+      border-top: 5px solid var(--amber);
+      padding: 22px;
+    }
+    .modal h2 { margin: 0; font-family: Georgia, serif; font-size: 27px; font-weight: 400; }
+    .modal p, .modal li { color: #58625d; font-size: 11px; line-height: 1.6; }
+    .modal-footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+    .toast {
+      position: fixed;
+      left: 50%; bottom: 22px;
+      z-index: 150;
+      transform: translate(-50%, 25px);
+      opacity: 0;
+      padding: 10px 14px;
+      background: var(--ink);
+      color: white;
+      font-size: 10px;
+      box-shadow: var(--shadow);
+      transition: .2s ease;
+      pointer-events: none;
+    }
+    .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+    @media (max-width: 1100px) {
+      .workspace { grid-template-columns: 190px minmax(520px, 1fr) 280px; }
+      .sidebar .side-section { padding-left: 12px; padding-right: 12px; }
+      .mode-btn { min-width: 84px; }
+    }
+    @media (max-width: 850px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; }
+      header { grid-template-columns: 1fr auto; }
+      .top-modes { display: none; }
+      .workspace { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .detail-panel { border-left: 0; }
+      .map-shell { height: 720px; }
+      .map-stage { bottom: 180px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="brand-mark">N</div>
+        <div>Nash / Shift <small>Neighborhood Intelligence</small></div>
+      </div>
+      <div class="top-modes" aria-label="View modes">
+        <button class="mode-btn" data-mode="resident">Resident</button>
+        <button class="mode-btn active" data-mode="investor">Investor</button>
+        <button class="mode-btn" data-mode="planner">Planner</button>
+      </div>
+      <div class="header-actions">
+        <button class="top-button" id="model-notes">Model notes</button>
+        <button class="top-button primary" id="export-btn">Export brief</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar">
+        <section class="side-section">
+          <div class="section-kicker"><span>Find a place</span><span id="area-count">36 areas</span></div>
+          <input class="search" id="search" placeholder="Search neighborhoods or corridors..." />
+        </section>
+
+        <section class="side-section">
+          <div class="section-kicker"><span>Map signal</span><span id="metric-label">Opportunity</span></div>
+          <div class="metric-list" id="metric-list">
+            <button class="metric-btn active" data-metric="opportunity" style="--dot:#d79a38"><i class="metric-dot"></i><span>Opportunity score</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="rawUpside" style="--dot:#c66e39"><i class="metric-dot"></i><span>Raw market upside</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="affordability" style="--dot:#5c8a72"><i class="metric-dot"></i><span>Housing affordability</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="jobs" style="--dot:#718da0"><i class="metric-dot"></i><span>Job access</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="commute" style="--dot:#6e856b"><i class="metric-dot"></i><span>Mobility access</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="schools" style="--dot:#997e58"><i class="metric-dot"></i><span>School access</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="safety" style="--dot:#78836d"><i class="metric-dot"></i><span>Public-safety access</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="parks" style="--dot:#668e68"><i class="metric-dot"></i><span>Park access</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="flood" style="--dot:#547d91"><i class="metric-dot"></i><span>Flood exposure</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="heat" style="--dot:#bd6947"><i class="metric-dot"></i><span>Heat exposure</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="homeValue" style="--dot:#4e6b5d"><i class="metric-dot"></i><span>Home value</span><span class="unit">USD</span></button>
+            <button class="metric-btn" data-metric="income" style="--dot:#6d91a2"><i class="metric-dot"></i><span>Household income</span><span class="unit">USD</span></button>
+            <button class="metric-btn" data-metric="displacement" style="--dot:#a84a3f"><i class="metric-dot"></i><span>Displacement risk</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="vacancy" style="--dot:#857f70"><i class="metric-dot"></i><span>Underutilization</span><span class="unit">%</span></button>
+            <button class="metric-btn" data-metric="taxPressure" style="--dot:#b85f4d"><i class="metric-dot"></i><span>Property-tax pressure</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="permitVelocity" style="--dot:#718da0"><i class="metric-dot"></i><span>Permit velocity</span><span class="unit">0–100</span></button>
+            <button class="metric-btn" data-metric="rentBurden" style="--dot:#9b745a"><i class="metric-dot"></i><span>Rent burden</span><span class="unit">%</span></button>
+          </div>
+        </section>
+
+        <details class="side-section optional-context">
+          <summary>Optional historical context</summary>
+          <div class="scenario-card">
+            <div class="scenario-row"><span class="scenario-name">Historic community context</span><button class="switch" data-context="historicBlack" aria-label="Toggle historic community context"></button></div>
+            <div class="scenario-desc">Optional historic context for Bordeaux, North Nashville, and Jefferson Street.</div>
+          </div>
+          <div class="scenario-card">
+            <div class="scenario-row"><span class="scenario-name">Institutions & anchors</span><button class="switch" data-context="anchors" aria-label="Toggle institutions and anchors"></button></div>
+            <div class="scenario-desc">Universities, medical institutions, and major civic anchors.</div>
+          </div>
+          <div class="scenario-card">
+            <div class="scenario-row"><span class="scenario-name">I-40 legacy</span><button class="switch" data-context="interstate" aria-label="Toggle I-40 legacy"></button></div>
+            <div class="scenario-desc">Highlights the infrastructure barrier through North Nashville.</div>
+          </div>
+        </details>
+
+        <section class="side-section">
+          <div class="section-kicker"><span>Future scenarios</span><span id="scenario-count">1 active</span></div>
+          <div class="scenario-card">
+            <div class="scenario-row"><span class="scenario-name">East Bank buildout</span><button class="switch on" data-scenario="eastBank" aria-label="Toggle East Bank buildout"></button></div>
+            <div class="scenario-desc">Stadium district, riverfront connections, and mixed-use intensity.</div>
+          </div>
+          <div class="scenario-card">
+            <div class="scenario-row"><span class="scenario-name">Transit expansion</span><button class="switch" data-scenario="transit" aria-label="Toggle transit expansion"></button></div>
+            <div class="scenario-desc">Frequent bus network and mobility hubs along priority corridors.</div>
+          </div>
+          <div class="scenario-card">
+            <div class="scenario-row"><span class="scenario-name">Greenway network</span><button class="switch" data-scenario="greenway" aria-label="Toggle greenway expansion"></button></div>
+            <div class="scenario-desc">New creek, rail, and river links increase access and desirability.</div>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <div class="briefing">
+            <span class="briefing-tag">Signal briefing · 06/26</span>
+            <h3>Addresses turn signals into decisions.</h3>
+            <p>Every ranked area now includes specific opportunity nodes, type, status, and constraints.</p>
+          </div>
+        </section>
+
+        <section class="side-section">
+          <div class="section-kicker"><span>Citywide opportunity rank</span><span>Explained</span></div>
+          <div class="rank-list" id="rank-list"></div>
+        </section>
+      </aside>
+
+      <section class="map-shell">
+        <div class="map-stage" id="map-stage">
+          <div class="map-topbar">
+            <div class="year-card">
+              <div class="year-line"><span class="year-number" id="year-number">2026</span><span class="year-status" id="year-status">Now</span></div>
+              <div class="year-sub" id="year-sub">Modeled present-day neighborhood signals</div>
+            </div>
+            <div class="map-badge"><strong id="top-signal">Madison</strong> leads opportunity rank</div>
+          </div>
+	          <div class="map-readout">
+	            <div>Coverage<strong>Davidson + ring</strong></div>
+	            <div>Signals<strong id="map-area-count">36 / 267</strong></div>
+	            <div>Boundaries<strong>Reference map</strong></div>
+	          </div>
+          <div class="map-controls">
+            <button class="map-control" id="zoom-in" aria-label="Zoom in">+</button>
+            <button class="map-control" id="zoom-out" aria-label="Zoom out">−</button>
+            <button class="map-control" id="reset-map" aria-label="Reset map">⌂</button>
+          </div>
+          <div class="compare-tray" id="compare-tray">
+            <div class="compare-head"><span>Neighborhood comparison</span><button class="mini-button" id="close-compare">Close</button></div>
+            <div class="compare-grid" id="compare-grid"></div>
+          </div>
+          <div id="leaflet-map" role="img" aria-label="Interactive geographic map of Nashville neighborhood investment signals"></div>
+          <div class="legend">
+            <span id="legend-name">Opportunity score</span>
+            <div class="legend-scale" id="legend-scale"></div>
+            <div style="display:flex;justify-content:space-between"><span>Lower</span><span>Higher</span></div>
+          </div>
+          <div class="north-arrow">N</div>
+        </div>
+
+        <div class="timeline">
+          <div class="timeline-head">
+            <div class="timeline-title">Time machine · 1980–2035</div>
+            <div class="timeline-actions">
+              <button class="mini-button" id="play-btn">▶ Play</button>
+              <button class="mini-button active" id="forecast-btn">Forecast on</button>
+            </div>
+          </div>
+          <div class="timeline-inner">
+            <div class="slider-wrap"><input id="year-slider" type="range" min="1980" max="2035" value="2026" step="1" /></div>
+            <div class="year-ticks"><span>1980</span><span>1990</span><span>2000</span><span>2010</span><span>2020</span><span>2030</span><span>2035</span></div>
+            <div class="era-row">
+              <div class="era"><div class="era-year">1980s · Diffuse</div><div class="era-text">Population loss around the urban core; suburban pull accelerates.</div></div>
+              <div class="era"><div class="era-year">2000s · Recenter</div><div class="era-text">Downtown housing and creative districts reshape demand.</div></div>
+              <div class="era"><div class="era-year">2020s · Pressure</div><div class="era-text">Fast appreciation moves outward along key corridors.</div></div>
+              <div class="era"><div class="era-year">2030s · Forecast</div><div class="era-text">Access, resilience, and underused land drive the next cycle.</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="detail-panel">
+        <div class="detail-hero">
+          <div class="eyebrow" id="detail-eyebrow">Emerging value · North Nashville</div>
+          <div class="detail-title-row">
+            <div>
+              <h1 id="detail-name">Bordeaux</h1>
+              <p id="detail-summary">Large parcels, strong river adjacency, and improving access create asymmetric upside.</p>
+            </div>
+            <div class="score-ring"><div><strong id="detail-score">64</strong><span>Opportunity score</span></div></div>
+          </div>
+          <div class="detail-actions">
+            <button class="detail-action" id="watch-btn">＋ Watchlist</button>
+            <button class="detail-action" id="compare-btn">⇄ Compare</button>
+            <button class="detail-action" id="drill-btn">⌖ Sites</button>
+          </div>
+        </div>
+
+        <section class="detail-section">
+          <div class="section-kicker"><span id="snapshot-title">2026 snapshot</span><span id="forecast-change">+18% to 2035</span></div>
+          <div class="metrics-grid">
+            <div class="metric-card"><div class="metric-label">Median home value</div><div class="metric-value" id="home-value">$284K</div><div class="metric-change" id="home-change">+8.4% modeled YoY</div></div>
+            <div class="metric-card"><div class="metric-label">Household income</div><div class="metric-value" id="income-value">$58K</div><div class="metric-change" id="income-change">+3.8% modeled YoY</div></div>
+            <div class="metric-card"><div class="metric-label">Underutilized land</div><div class="metric-value" id="vacancy-value">14.2%</div><div class="metric-change">Development capacity</div></div>
+            <div class="metric-card"><div class="metric-label">Displacement risk</div><div class="metric-value" id="risk-value">61</div><div class="metric-change warn" id="risk-change">High vigilance</div></div>
+            <div class="metric-card"><div class="metric-label">Housing affordability</div><div class="metric-value" id="affordability-value">62</div><div class="metric-change">Relative citywide index</div></div>
+            <div class="metric-card"><div class="metric-label">Job access</div><div class="metric-value" id="jobs-value">64</div><div class="metric-change">Employment accessibility</div></div>
+            <div class="metric-card"><div class="metric-label">Property-tax pressure</div><div class="metric-value" id="tax-value">67</div><div class="metric-change warn">Owner displacement signal</div></div>
+            <div class="metric-card"><div class="metric-label">Permit velocity</div><div class="metric-value" id="permit-value">43</div><div class="metric-change">Development activity</div></div>
+            <div class="metric-card"><div class="metric-label">Mobility access</div><div class="metric-value" id="commute-value">66</div><div class="metric-change">Transit and road access</div></div>
+            <div class="metric-card"><div class="metric-label">School access</div><div class="metric-value" id="schools-value">58</div><div class="metric-change">Modeled access index</div></div>
+            <div class="metric-card"><div class="metric-label">Flood exposure</div><div class="metric-value" id="flood-value">42</div><div class="metric-change warn">Lower is better</div></div>
+            <div class="metric-card"><div class="metric-label">Heat exposure</div><div class="metric-value" id="heat-value">46</div><div class="metric-change warn">Lower is better</div></div>
+            <div class="metric-card"><div class="metric-label">Raw market upside</div><div class="metric-value" id="raw-value">87</div><div class="metric-change">Before execution risks</div></div>
+            <div class="metric-card"><div class="metric-label">Rent burden</div><div class="metric-value" id="rent-value">42%</div><div class="metric-change warn">Household pressure</div></div>
+          </div>
+	        </section>
+
+	        <section class="detail-section">
+	          <div class="section-kicker"><span>Why this ranks here</span><span>Score drivers</span></div>
+	          <div class="opportunity-case" id="opportunity-case"></div>
+	        </section>
+
+	        <section class="detail-section">
+	          <div class="section-kicker"><span>Signal strength</span><span>Modeled</span></div>
+          <div class="bar-list">
+            <div><div class="bar-row-top"><span>Infrastructure access</span><strong id="transit-label">72</strong></div><div class="bar-track"><div class="bar-fill" id="transit-bar" style="width:72%"></div></div></div>
+            <div><div class="bar-row-top"><span>Market momentum</span><strong id="momentum-label">66</strong></div><div class="bar-track"><div class="bar-fill amber" id="momentum-bar" style="width:66%"></div></div></div>
+            <div><div class="bar-row-top"><span>Community pressure</span><strong id="pressure-label">61</strong></div><div class="bar-track"><div class="bar-fill red" id="pressure-bar" style="width:61%"></div></div></div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="section-kicker"><span>Value catalysts</span><span id="catalyst-count">3 signals</span></div>
+          <div class="catalyst-list" id="catalyst-list"></div>
+        </section>
+
+        <section class="detail-section" id="block-section">
+          <div class="section-kicker"><span>Address-level opportunity nodes</span><span id="block-status">Select sites</span></div>
+          <div class="context-note">These are real addresses or intersections used as modeled opportunity nodes, not property listings. Verify ownership, availability, zoning, environmental conditions, and active development status through Metro parcel and development records.</div>
+          <div class="block-list" id="block-list"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal">
+      <div class="eyebrow" style="color:#748078">Prototype methodology</div>
+      <h2>Nash / Shift model notes</h2>
+      <p>This interactive prototype uses illustrative modeled values alongside Metro planning context. It is not investment advice and should not be treated as a live property valuation or property-listing tool.</p>
+      <ul>
+        <li>Opportunity score blends market upside, affordability, jobs, mobility, permits, taxes, displacement, flood exposure, and heat exposure.</li>
+        <li>Address-level opportunity nodes are analytical starting points, not verified listings or claims that a parcel is available.</li>
+	        <li>Neighborhood boundaries are loaded from the public Google My Maps reference supplied by the user; surrounding counties use the U.S. Census Bureau TIGERweb county layer.</li>
+	      </ul>
+	      <p><a href="https://www.google.com/maps/d/u/0/viewer?mid=1HMVHxQP_q3jmfNDYg1baQ3UqiKVRw-U" target="_blank">Neighborhood reference map</a> · <a href="https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1" target="_blank">Census TIGERweb counties</a> · <a href="https://www.nashville.gov/departments/planning/long-range-planning/community-plans" target="_blank">Metro Community Plans</a> · <a href="https://maps.nashville.gov/developmenttracker" target="_blank">Development Tracker</a> · <a href="https://maps.nashville.gov/ParcelViewer/" target="_blank">Metro Parcel Viewer</a> · <a href="https://www.census.gov/data/developers/data-sets/acs-5year.html" target="_blank">ACS 5-Year Data</a></p>
+      <div class="modal-footer"><button class="top-button primary" id="close-modal">Understood</button></div>
+    </div>
+  </div>
+  <div class="toast" id="toast">Added to watchlist</div>
+
+	  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+	  <script src="./assets/reference-boundaries.js"></script>
+	  <script>
+    const neighborhoods = [
+      { id:"bordeaux", name:"Bordeaux", region:"North Nashville", lat:36.1939, lng:-86.8314, price:284, income:58, diversity:81, displacement:61, vacancy:14.2, transit:72, momentum:66, opportunity:87, forecast:18, growth:1.7, summary:"Large parcels, strong river adjacency, and improving access create asymmetric upside.", catalysts:[["Clarksville Pike corridor","Near term"],["Riverfront access potential","Structural"],["Large-site redevelopment capacity","Long term"]] },
+      { id:"madison", name:"Madison", region:"North Davidson", lat:36.2562, lng:-86.7144, price:326, income:63, diversity:74, displacement:48, vacancy:11.7, transit:69, momentum:72, opportunity:84, forecast:21, growth:1.9, summary:"A commercial spine, regional access, and attainable housing form a compelling reinvestment thesis.", catalysts:[["Gallatin Pike intensity","Active"],["Mobility hub potential","Scenario"],["Retail parcel consolidation","Near term"]] },
+      { id:"east", name:"East Nashville", region:"East Nashville", lat:36.1840, lng:-86.7380, price:578, income:91, diversity:60, displacement:79, vacancy:5.8, transit:76, momentum:82, opportunity:55, forecast:11, growth:2.4, summary:"Mature momentum remains strong, while price and displacement pressure limit asymmetric upside.", catalysts:[["East Bank adjacency","Active"],["Established retail fabric","Structural"],["High renovation velocity","Active"]] },
+      { id:"donelson", name:"Donelson", region:"East Davidson", lat:36.1681, lng:-86.6664, price:389, income:78, diversity:68, displacement:43, vacancy:8.9, transit:77, momentum:70, opportunity:76, forecast:17, growth:1.8, summary:"Airport adjacency and rail access support a durable, mixed-use growth path.", catalysts:[["Airport employment engine","Structural"],["Music City Star access","Active"],["Lebanon Pike infill","Near term"]] },
+      { id:"germantown", name:"Germantown", region:"Urban Core", lat:36.1768, lng:-86.7900, price:621, income:102, diversity:52, displacement:74, vacancy:4.4, transit:88, momentum:73, opportunity:43, forecast:7, growth:2.5, summary:"A high-performing urban district with lower remaining discovery value.", catalysts:[["Core walkability","Structural"],["Riverfront connections","Active"],["Premium housing demand","Active"]] },
+      { id:"downtown", name:"Downtown", region:"Urban Core", lat:36.1627, lng:-86.7816, price:648, income:96, diversity:57, displacement:68, vacancy:7.2, transit:96, momentum:75, opportunity:51, forecast:9, growth:2.2, summary:"The region’s access leader benefits from continued infill but carries mature-market pricing.", catalysts:[["Transit convergence","Structural"],["East Bank spillover","Active"],["Hospitality demand","Cyclical"]] },
+      { id:"north", name:"North Nashville", region:"North Nashville", lat:36.1774, lng:-86.8065, price:337, income:55, diversity:83, displacement:77, vacancy:12.4, transit:80, momentum:74, opportunity:71, forecast:16, growth:2.0, summary:"Strong location and cultural assets meet intense displacement pressure; equitable capital matters here.", catalysts:[["Jefferson Street institutions","Structural"],["Downtown proximity","Structural"],["Mixed-use infill pressure","Active"]] },
+      { id:"nations", name:"The Nations", region:"West Nashville", lat:36.1652, lng:-86.8495, price:506, income:88, diversity:49, displacement:81, vacancy:6.1, transit:61, momentum:79, opportunity:48, forecast:8, growth:2.6, summary:"Rapidly repriced and highly active; future gains are paired with elevated entry cost.", catalysts:[["Charlotte Pike demand","Active"],["Industrial conversion","Mature"],["Westside access","Structural"]] },
+      { id:"sylvan", name:"Sylvan Park", region:"West Nashville", lat:36.1436, lng:-86.8375, price:692, income:118, diversity:45, displacement:65, vacancy:3.7, transit:66, momentum:59, opportunity:32, forecast:6, growth:2.1, summary:"Stable, premium, and supply-constrained; a preservation market more than an emerging-value play.", catalysts:[["Established amenities","Structural"],["Supply constraint","Structural"],["Premium school access","Structural"]] },
+      { id:"edgehill", name:"Edgehill", region:"Urban Core", lat:36.1439, lng:-86.7865, price:475, income:67, diversity:78, displacement:86, vacancy:8.1, transit:89, momentum:76, opportunity:58, forecast:12, growth:2.4, summary:"Exceptional access drives value, alongside the map’s highest modeled displacement pressure.", catalysts:[["Midtown employment access","Structural"],["Transit priority corridor","Scenario"],["Mixed-income redevelopment","Active"]] },
+      { id:"weho", name:"Wedgewood–Houston", region:"South Nashville", lat:36.1326, lng:-86.7785, price:521, income:84, diversity:63, displacement:82, vacancy:7.8, transit:81, momentum:86, opportunity:62, forecast:14, growth:2.7, summary:"Creative-industry momentum remains potent, though discovery value is quickly compressing.", catalysts:[["Fairgrounds redevelopment","Active"],["Creative business cluster","Structural"],["Transit access","Scenario"]] },
+      { id:"antioch", name:"Antioch", region:"Southeast Davidson", lat:36.0614, lng:-86.6722, price:349, income:72, diversity:90, displacement:49, vacancy:10.8, transit:70, momentum:69, opportunity:82, forecast:23, growth:1.8, summary:"Regional connectivity, diversity, and remaining capacity support the strongest long-range value thesis.", catalysts:[["Global Mall repositioning","Near term"],["I-24 employment corridor","Structural"],["Regional mobility hub","Scenario"]] }
+    ];
+
+    neighborhoods.push(
+      {id:"inglewood",name:"Inglewood",region:"East Nashville",lat:36.2126,lng:-86.7267,price:461,income:76,diversity:66,displacement:66,vacancy:7.6,transit:68,momentum:73,opportunity:69,forecast:15,growth:2.1,summary:"A residential eastside market with corridor-scale infill potential.",catalysts:[["Gallatin Pike access","Structural"],["Commercial infill","Near term"],["Greenway access","Active"]]},
+      {id:"clevelandpark",name:"Cleveland Park",region:"East Nashville",lat:36.1925,lng:-86.7690,price:439,income:70,diversity:72,displacement:75,vacancy:8.5,transit:77,momentum:80,opportunity:66,forecast:15,growth:2.4,summary:"Close-in access and active redevelopment create momentum with significant pressure.",catalysts:[["Dickerson Pike access","Structural"],["East Bank adjacency","Active"],["Small-lot infill","Active"]]},
+      {id:"dickerson",name:"Dickerson Pike",region:"North/East Corridor",lat:36.2140,lng:-86.7600,price:354,income:59,diversity:77,displacement:64,vacancy:13.0,transit:75,momentum:72,opportunity:83,forecast:22,growth:2.0,summary:"A major underused commercial corridor with adopted planning direction.",catalysts:[["Dickerson North study","Adopted"],["Commercial parcels","Active"],["Downtown connection","Structural"]]},
+      {id:"oldhickory",name:"Old Hickory",region:"North Davidson",lat:36.2592,lng:-86.6486,price:318,income:67,diversity:58,displacement:42,vacancy:9.8,transit:49,momentum:57,opportunity:70,forecast:14,growth:1.6,summary:"Attainable housing and village-scale reinvestment potential.",catalysts:[["Old Hickory Village","Structural"],["Lake access","Structural"],["Industrial transition","Long term"]]},
+      {id:"goodlettsville",name:"Goodlettsville",region:"North Davidson",lat:36.3231,lng:-86.7133,price:351,income:74,diversity:61,displacement:38,vacancy:10.1,transit:50,momentum:58,opportunity:68,forecast:13,growth:1.5,summary:"Regional retail access and attainable housing support steady growth.",catalysts:[["Rivergate repositioning","Long term"],["I-65 access","Structural"],["Regional retail","Active"]]},
+      {id:"whitescreek",name:"Whites Creek",region:"Northwest Davidson",lat:36.2745,lng:-86.8308,price:329,income:69,diversity:70,displacement:42,vacancy:12.8,transit:43,momentum:52,opportunity:72,forecast:15,growth:1.5,summary:"Large parcels and rural character create selective long-horizon potential.",catalysts:[["Large parcels","Structural"],["Briley Parkway access","Structural"],["Conservation constraints","Constraint"]]},
+      {id:"charlottepark",name:"Charlotte Park",region:"West Nashville",lat:36.1513,lng:-86.8756,price:441,income:83,diversity:64,displacement:62,vacancy:7.9,transit:63,momentum:68,opportunity:67,forecast:13,growth:2.0,summary:"Charlotte Pike access and remaining commercial parcels support infill.",catalysts:[["Charlotte Pike","Structural"],["Commercial infill","Near term"],["Westside access","Structural"]]},
+      {id:"westmeade",name:"West Meade",region:"West Nashville",lat:36.1128,lng:-86.8950,price:650,income:124,diversity:39,displacement:32,vacancy:4.3,transit:38,momentum:46,opportunity:39,forecast:6,growth:1.4,summary:"Stable premium housing with limited development capacity.",catalysts:[["Large lots","Structural"],["Premium demand","Active"],["Limited transit","Constraint"]]},
+      {id:"bellevue",name:"Bellevue",region:"Southwest Davidson",lat:36.0725,lng:-86.9389,price:426,income:91,diversity:55,displacement:39,vacancy:8.6,transit:48,momentum:61,opportunity:68,forecast:14,growth:1.6,summary:"Regional amenities and remaining capacity support steady family-oriented growth.",catalysts:[["One Bellevue Place","Active"],["I-40 access","Structural"],["Harpeth River exposure","Constraint"]]},
+      {id:"greenhills",name:"Green Hills",region:"South Nashville",lat:36.1078,lng:-86.8169,price:872,income:154,diversity:34,displacement:41,vacancy:3.1,transit:59,momentum:55,opportunity:31,forecast:5,growth:1.3,summary:"High-value established market with constrained supply and congestion.",catalysts:[["Regional retail","Structural"],["Premium schools","Structural"],["Congestion","Constraint"]]},
+      {id:"hillsboro",name:"Hillsboro Village",region:"South Nashville",lat:36.1367,lng:-86.8011,price:706,income:112,diversity:51,displacement:66,vacancy:4.8,transit:79,momentum:64,opportunity:43,forecast:7,growth:1.8,summary:"Walkable institutional district with mature pricing.",catalysts:[["Vanderbilt adjacency","Structural"],["Walkability","Structural"],["Mature pricing","Constraint"]]},
+      {id:"midtown",name:"Midtown",region:"Urban Core",lat:36.1518,lng:-86.7975,price:622,income:101,diversity:58,displacement:64,vacancy:6.2,transit:87,momentum:72,opportunity:49,forecast:8,growth:2.0,summary:"Employment density and walkability support infill, but entry costs are high.",catalysts:[["Employment access","Structural"],["Transit convergence","Structural"],["High basis","Constraint"]]},
+      {id:"musicrow",name:"Music Row",region:"Urban Core",lat:36.1510,lng:-86.7920,price:649,income:98,diversity:55,displacement:69,vacancy:5.4,transit:84,momentum:70,opportunity:45,forecast:7,growth:1.9,summary:"Institutional and creative-economy value with preservation tensions.",catalysts:[["Creative economy","Structural"],["Midtown access","Structural"],["Preservation pressure","Constraint"]]},
+      {id:"twelvesouth",name:"12 South",region:"South Nashville",lat:36.1245,lng:-86.7906,price:818,income:139,diversity:37,displacement:73,vacancy:3.2,transit:62,momentum:68,opportunity:34,forecast:5,growth:1.9,summary:"Highly mature neighborhood retail and premium housing market.",catalysts:[["Neighborhood retail","Structural"],["Premium demand","Active"],["Limited capacity","Constraint"]]},
+      {id:"berryhill",name:"Berry Hill",region:"South Nashville",lat:36.1199,lng:-86.7678,price:498,income:85,diversity:61,displacement:69,vacancy:8.8,transit:76,momentum:77,opportunity:63,forecast:13,growth:2.3,summary:"Small commercial municipality with creative-industry and infill potential.",catalysts:[["Creative businesses","Structural"],["Fairgrounds access","Active"],["Commercial parcels","Near term"]]},
+      {id:"woodbine",name:"Woodbine",region:"South Nashville",lat:36.1160,lng:-86.7475,price:372,income:66,diversity:88,displacement:72,vacancy:8.7,transit:75,momentum:74,opportunity:68,forecast:15,growth:2.1,summary:"Central access and affordability create demand with rising resident pressure.",catalysts:[["Nolensville Pike","Structural"],["I-440 access","Structural"],["Housing demand","Active"]]},
+      {id:"nolensville",name:"Nolensville Pike",region:"South Nashville Corridor",lat:36.0950,lng:-86.7245,price:343,income:61,diversity:94,displacement:57,vacancy:12.6,transit:78,momentum:66,opportunity:84,forecast:22,growth:1.8,summary:"A high-ridership multicultural corridor with substantial commercial redevelopment capacity.",catalysts:[["High-ridership transit","Structural"],["Commercial parcels","Active"],["Affordable retail","Structural"]]},
+      {id:"glencliff",name:"Glencliff",region:"South Nashville",lat:36.0990,lng:-86.7135,price:331,income:62,diversity:89,displacement:52,vacancy:10.5,transit:68,momentum:62,opportunity:75,forecast:17,growth:1.7,summary:"Attainable housing and central access support balanced growth.",catalysts:[["Airport proximity","Structural"],["Nolensville Pike access","Structural"],["Housing affordability","Active"]]},
+      {id:"crievehall",name:"Crieve Hall",region:"South Nashville",lat:36.0712,lng:-86.7557,price:501,income:101,diversity:55,displacement:42,vacancy:4.9,transit:45,momentum:50,opportunity:48,forecast:8,growth:1.4,summary:"Stable family housing market with limited infill capacity.",catalysts:[["Stable demand","Structural"],["School access","Structural"],["Limited capacity","Constraint"]]},
+      {id:"caneRidge",name:"Cane Ridge",region:"Southeast Davidson",lat:36.0015,lng:-86.6250,price:402,income:86,diversity:79,displacement:34,vacancy:11.2,transit:39,momentum:68,opportunity:73,forecast:17,growth:1.7,summary:"Fast-growing edge market with capacity and infrastructure needs.",catalysts:[["Residential growth","Active"],["I-24 access","Structural"],["Infrastructure needs","Constraint"]]},
+      {id:"priestlake",name:"Priest Lake",region:"Southeast Davidson",lat:36.0808,lng:-86.6292,price:361,income:75,diversity:82,displacement:41,vacancy:9.6,transit:55,momentum:64,opportunity:72,forecast:16,growth:1.7,summary:"Lake access, airport employment, and attainable homes support steady demand.",catalysts:[["Lake access","Structural"],["Airport jobs","Structural"],["Regional access","Active"]]},
+      {id:"hermitage",name:"Hermitage",region:"East Davidson",lat:36.1962,lng:-86.6200,price:374,income:77,diversity:67,displacement:37,vacancy:8.5,transit:61,momentum:60,opportunity:70,forecast:14,growth:1.6,summary:"Commuter rail and attainable housing support steady infill.",catalysts:[["Music City Star","Structural"],["Lebanon Pike","Structural"],["Suburban infill","Near term"]]},
+      {id:"eastbank",name:"East Bank",region:"Urban Core",lat:36.1718,lng:-86.7650,price:535,income:82,diversity:61,displacement:70,vacancy:18.0,transit:88,momentum:91,opportunity:88,forecast:28,growth:2.8,summary:"The city’s largest planned urban-core transformation area.",catalysts:[["Stadium district","Active"],["Riverfront redevelopment","Active"],["New street grid","Planned"]]},
+      {id:"sobro",name:"SoBro",region:"Urban Core",lat:36.1540,lng:-86.7745,price:625,income:94,diversity:54,displacement:65,vacancy:7.0,transit:91,momentum:74,opportunity:52,forecast:9,growth:2.0,summary:"Hospitality and entertainment district with mature pricing and infill sites.",catalysts:[["Convention center","Structural"],["Downtown access","Structural"],["Hospitality cycle","Cyclical"]]}
+    );
+
+    const communityMetrics = {
+      bordeaux: {continuity:94, blackOwnership:62, taxPressure:67, permitVelocity:43, rentBurden:42, heritage:true, thesis:"Community-led reinvestment", reason:"Strong capacity and access, but historic Black ownership and continuity require partnership-first capital."},
+      madison: {continuity:48, blackOwnership:31, taxPressure:55, permitVelocity:62, rentBurden:47, heritage:false, thesis:"Corridor reinvestment", reason:"Attainable basis, commercial parcels, and transit potential with moderate community pressure."},
+      east: {continuity:58, blackOwnership:24, taxPressure:84, permitVelocity:88, rentBurden:45, heritage:false, thesis:"Selective / late cycle", reason:"Strong demand but high pricing, tax pressure, and displacement reduce responsible upside."},
+      donelson: {continuity:39, blackOwnership:18, taxPressure:47, permitVelocity:58, rentBurden:39, heritage:false, thesis:"Transit-oriented infill", reason:"Rail and airport access support infill with comparatively lower displacement pressure."},
+      germantown: {continuity:51, blackOwnership:13, taxPressure:79, permitVelocity:74, rentBurden:38, heritage:false, thesis:"Mature / hold", reason:"High access and demand are already priced in; limited underutilized land remains."},
+      downtown: {continuity:35, blackOwnership:8, taxPressure:72, permitVelocity:91, rentBurden:44, heritage:false, thesis:"Institutional infill", reason:"Best access and permit velocity, but mature pricing limits discovery value."},
+      north: {continuity:98, blackOwnership:45, taxPressure:86, permitVelocity:79, rentBurden:50, heritage:true, thesis:"Protect + partner", reason:"Exceptional access sits within Nashville’s historic Black cultural core; preservation and ownership continuity are mandatory."},
+      nations: {continuity:42, blackOwnership:17, taxPressure:88, permitVelocity:82, rentBurden:41, heritage:false, thesis:"Late cycle", reason:"Rapid repricing and conversion activity leave limited responsible entry points."},
+      sylvan: {continuity:37, blackOwnership:10, taxPressure:69, permitVelocity:35, rentBurden:31, heritage:false, thesis:"Preserve / hold", reason:"Premium, supply-constrained market with little underutilized land."},
+      edgehill: {continuity:86, blackOwnership:28, taxPressure:92, permitVelocity:83, rentBurden:52, heritage:true, thesis:"Protect + partner", reason:"Historic community and extreme displacement pressure outweigh conventional acquisition upside."},
+      weho: {continuity:57, blackOwnership:15, taxPressure:90, permitVelocity:94, rentBurden:43, heritage:false, thesis:"Selective / late cycle", reason:"Very high permit velocity signals momentum, but pricing and displacement risk are elevated."},
+      antioch: {continuity:50, blackOwnership:29, taxPressure:53, permitVelocity:60, rentBurden:48, heritage:false, thesis:"Long-horizon mixed use", reason:"Diversity, regional access, and remaining capacity produce the strongest balanced long-term case."}
+    };
+    neighborhoods.forEach((n,i) => Object.assign(n, {
+      continuity: 42 + (i*7)%31,
+      blackOwnership: 12 + (i*9)%34,
+      taxPressure: null,
+      permitVelocity: n.momentum,
+      rentBurden: Math.round(31 + (100-n.income)*.18 + n.displacement*.08),
+      affordability: Math.round(Math.max(15,Math.min(95,105-n.price/8+n.income/7))),
+      jobs: null,
+      commute: null,
+      schools: Math.round(Math.max(25,Math.min(92,42+n.income*.28-n.vacancy*.4))),
+      flood: Math.round(25+(i*13)%55),
+      heat: Math.round(30+(i*11)%52),
+      safety: Math.round(35+(i*17)%50),
+      parks: Math.round(34+(i*19)%58),
+      heritage:false,
+      thesis:"Targeted infill",
+      reason:`${n.catalysts[0][0]} and ${n.catalysts[1][0].toLowerCase()} support the case; verify site availability and constraints.`
+    }, communityMetrics[n.id] || {}));
+    neighborhoods.forEach(n => {
+      if (n.taxPressure === null) n.taxPressure = Math.round(Math.min(96,28+n.growth*18+n.displacement*.28));
+      n.jobs = Math.round(Math.max(20,Math.min(98,n.transit*.65+n.momentum*.25)));
+      n.commute = Math.round(Math.max(20,Math.min(98,n.transit*.8+n.jobs*.12)));
+    });
+
+    const state = {
+      year: 2026,
+      metric: "opportunity",
+      selected: "antioch",
+      mode: "investor",
+      zoom: 1,
+      playing: false,
+      forecast: true,
+      compare: false,
+	      blocks: false,
+	      selectedBlock: null,
+	      search: "",
+	      watchlist: new Set(),
+      scenarios: { eastBank: true, transit: false, greenway: false },
+      context: { historicBlack: false, anchors: false, interstate: false }
+    };
+
+    const metricMeta = {
+      opportunity: { label:"Opportunity score", format:v=>Math.round(v), palette:["#d8d1c1","#b8c5b8","#86a18f","#d1a44f","#bd713b"] },
+      rawUpside: { label:"Raw market upside", format:v=>Math.round(v), palette:["#d8d1c1","#c9ba9d","#d1a35d","#cb8145","#a95432"] },
+      affordability: { label:"Housing affordability", format:v=>Math.round(v), palette:["#d9d4ca","#c4d0c6","#9db9aa","#71a087","#47765f"] },
+      jobs: { label:"Job access", format:v=>Math.round(v), palette:["#d8d4ca","#bdc8cc","#91aab4","#658b9b","#406a7b"] },
+      commute: { label:"Mobility access", format:v=>Math.round(v), palette:["#d9d4ca","#c0cabd","#98ad94","#708d6c","#4c6948"] },
+      schools: { label:"School access", format:v=>Math.round(v), palette:["#dbd6cc","#d0c1a8","#baa17b","#987b51","#725a38"] },
+      safety: { label:"Public-safety access", format:v=>Math.round(v), palette:["#dad7cf","#c4c9be","#9dab94","#74896b","#52654a"] },
+      parks: { label:"Park access", format:v=>Math.round(v), palette:["#d9d7cd","#c0cdbc","#97b596","#6d996f","#47784c"] },
+      flood: { label:"Flood exposure", format:v=>Math.round(v), palette:["#d8d5cb","#b8c8cf","#88abba","#5f8c9e","#3f6b7e"] },
+      heat: { label:"Heat exposure", format:v=>Math.round(v), palette:["#ddd5ca","#d9b89e","#cf8e6c","#bd6549","#94422f"] },
+      homeValue: { label:"Median home value", format:v=>"$"+Math.round(v)+"K", palette:["#d6d8cf","#b2c7b8","#7fa28d","#4e765f","#274b3a"] },
+      income: { label:"Household income", format:v=>"$"+Math.round(v)+"K", palette:["#d7d8d2","#b8c6c7","#8ba8b3","#658899","#426979"] },
+      diversity: { label:"Diversity index", format:v=>Math.round(v), palette:["#ddd7ce","#c6b9a9","#aa9275","#8b6f52","#68503a"] },
+      displacement: { label:"Displacement risk", format:v=>Math.round(v), palette:["#d9d4ca","#d5b7a4","#ca8b6c","#b9634d","#934139"] },
+      vacancy: { label:"Underutilized land", format:v=>v.toFixed(1)+"%", palette:["#dedbd2","#c5c0b5","#a29b8a","#7d7769","#59574f"] },
+      continuity: { label:"Community continuity", format:v=>Math.round(v), palette:["#d9d4ca","#d4c39f","#c7a76c","#ad8242","#805c2c"] },
+      blackOwnership: { label:"Black homeownership", format:v=>Math.round(v)+"%", palette:["#d9d4ca","#b9c8be","#8eaa9b","#668978","#3f6755"] },
+      taxPressure: { label:"Property-tax pressure", format:v=>Math.round(v), palette:["#d9d4ca","#d7baa9","#ce9074","#bd6551","#934139"] },
+      permitVelocity: { label:"Permit velocity", format:v=>Math.round(v), palette:["#d8d4ca","#b8c5c8","#8aa8b3","#608a9c","#3c6678"] },
+      rentBurden: { label:"Rent burden", format:v=>Math.round(v)+"%", palette:["#ddd7cf","#cfbdad","#b99a80","#9b745a","#76513e"] }
+    };
+
+	    const nashMap = L.map("leaflet-map", {
+	      zoomControl: false,
+	      attributionControl: true,
+	      minZoom: 8,
+	      maxZoom: 16
+	    }).setView([36.155, -86.76], 9);
+	    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+	      subdomains: "abcd",
+	      maxZoom: 20,
+	      attribution: "&copy; OpenStreetMap &copy; CARTO"
+	    }).addTo(nashMap);
+
+	    const referenceBoundaries = window.NASHVILLE_REFERENCE_BOUNDARIES || {features:[],metadata:{featureCount:0}};
+	    const ringCounties = window.NASHVILLE_RING_COUNTIES || {features:[],metadata:{featureCount:0}};
+	    const modelById = new Map(neighborhoods.map(n => [n.id,n]));
+	    const neighborhoodMarkers = new Map();
+	    const boundaryRecords = [];
+	    const countyLabels = L.layerGroup().addTo(nashMap);
+
+	    function boundaryKey(name) {
+	      return (name || "")
+	        .replace(/\u00a0/g," ")
+	        .replace(/&/g," and ")
+	        .toLowerCase()
+	        .replace(/[^a-z0-9]+/g," ")
+	        .trim();
+	    }
+
+	    const boundaryAliases = {
+	      bordeaux:["Bordeaux"],
+	      madison:["Madison","Rivergate"],
+	      east:["Shelby Park & Bottoms","Shelby Hills","Lockeland Springs","Historic Edgefield","East End","Eastwood","Rosebank","Porter Heights","Rolling Acres","Maxwell Heights","McFerrin Park"],
+	      donelson:["Donelson"],
+	      germantown:["GermanTown"],
+	      downtown:["Downtown","The Gulch","North Capitol","South Capitol","Commerce","Upper Broadway","Lower Broadway","Printers Alley","The Arcade","Riverfront & Bluffs","2nd Ave","Pie Town","Rutledge Hill","Rolling Mill Hill","Capitol View","Hope Gardens"],
+	      north:["Fisk","Meharry","Hadley","Elizabeth Park","North Fisk","Osage","Cumberland Gardens","Cumberland View","TSU","Hadley Park","Preston Taylor","Mckissack Hill","40Th Ave"],
+	      nations:["The Nations"],
+	      sylvan:["Sylvan Park","Sylvan Heights","30's Heights"],
+	      edgehill:["Edgehill"],
+	      weho:["Wedgewood-Houston"],
+	      antioch:["Antioch"],
+	      inglewood:["Inglewood"],
+	      clevelandpark:["Cleveland Park"],
+	      dickerson:["Talbot's Corner","Trinity Hills","Brick Church Business Park","Haynes Area","Cumberland Heights","Hillhurst","Oakwood","Hart Ln"],
+	      oldhickory:["Old Hickory"],
+	      goodlettsville:["Goodlettsville Davidson Co"],
+	      whitescreek:["White's Creek","Whites Creek"],
+	      charlottepark:["Charlotte Park","Charlotte Ave"],
+	      westmeade:["West Meade","Hillwood","White Bridge"],
+	      bellevue:["Bellevue"],
+	      greenhills:["Green Hills"],
+	      hillsboro:["Hillsboro-Belmont","Belmont","Hillsboro West end"],
+	      midtown:["Midtown","West End Park"],
+	      musicrow:["Music Row"],
+	      twelvesouth:["12Th Ave South"],
+	      berryhill:["Berry Hill"],
+	      woodbine:["Woodbine"],
+	      nolensville:["Tusculum","Paragon Mills","Grassmere","Radnor"],
+	      glencliff:["Glencliff","Glenrose","East Glencliff","Seven Oaks","Glengary","Vultee"],
+	      crievehall:["Crieve Hall"],
+	      caneRidge:["Cane Ridge","Cane Ridge Farms"],
+	      priestlake:["Priest lake","Priest Lake Meadows","Smith Springs","Una","Nashboro Village","Hamilton Creek","Bayview","Edge O Lake"],
+	      hermitage:["Hermitage","THE Hermitage","Ravenwood"],
+	      eastbank:["East Bank"],
+	      sobro:["SoBro"]
+	    };
+
+	    const modelByBoundaryName = new Map();
+	    Object.entries(boundaryAliases).forEach(([id,names]) => {
+	      names.forEach(name => {
+	        const key = boundaryKey(name);
+	        if (!modelByBoundaryName.has(key)) modelByBoundaryName.set(key,id);
+	      });
+	    });
+	    neighborhoods.forEach(n => {
+	      const key = boundaryKey(n.name);
+	      if (!modelByBoundaryName.has(key)) modelByBoundaryName.set(key,n.id);
+	    });
+	    function modelForBoundaryName(name) {
+	      const id = modelByBoundaryName.get(boundaryKey(name));
+	      return id ? modelById.get(id) : null;
+	    }
+
+	    const countyLayer = L.geoJSON(ringCounties, {
+	      style: feature => {
+	        const isDavidson = feature.properties?.GEOID === "47037";
+	        return {
+	          color:isDavidson ? "#d0a654" : "#71847e",
+	          weight:isDavidson ? 1.6 : 1,
+	          opacity:isDavidson ? .58 : .38,
+	          fillColor:isDavidson ? "#2d3b35" : "#1b2925",
+	          fillOpacity:isDavidson ? .045 : .025
+	        };
+	      },
+	      onEachFeature: (feature, layer) => {
+	        const name = feature.properties?.NAME || feature.properties?.BASENAME || "County";
+	        layer.bindTooltip(name, {sticky:true,className:"reference-label"});
+	        const bounds = layer.getBounds();
+	        if (bounds.isValid()) {
+	          L.tooltip({permanent:true,direction:"center",className:"county-label"})
+	            .setLatLng(bounds.getCenter())
+	            .setContent(name.replace(" County",""))
+	            .addTo(countyLabels);
+	        }
+	      }
+	    }).addTo(nashMap);
+
+	    function baseReferenceStyle(record, n, selected, matchesSearch = true) {
+	      if (n) {
+	        const value = valueAt(n);
+	        return {
+	          color:selected ? "#f6c45f" : "#d7d0c2",
+	          weight:selected ? 3 : .9,
+	          opacity:matchesSearch ? (selected ? 1 : .72) : .08,
+	          fillColor:colorFor(state.metric,value),
+	          fillOpacity:matchesSearch ? (selected ? .58 : .34) : .025
+	        };
+	      }
+	      const isMacro = record.feature.properties?.scale === "macro";
+	      return {
+	        color:isMacro ? "#a3a99f" : "#7d8a83",
+	        weight:isMacro ? 1.1 : .55,
+	        opacity:matchesSearch ? (isMacro ? .32 : .28) : .05,
+	        fillColor:isMacro ? "#1d2a25" : "#52635a",
+	        fillOpacity:matchesSearch ? (isMacro ? .015 : .045) : .006,
+	        dashArray:isMacro ? "5 6" : null
+	      };
+	    }
+
+	    const referenceLayer = L.geoJSON(referenceBoundaries, {
+	      style: feature => baseReferenceStyle({feature}, modelForBoundaryName(feature.properties?.name), false, true),
+	      onEachFeature: (feature, layer) => {
+	        const name = feature.properties?.name || "Reference boundary";
+	        const n = modelForBoundaryName(name);
+	        const record = {feature,layer,name,modelId:n?.id || null};
+	        boundaryRecords.push(record);
+	        layer.bindTooltip("", {sticky:true,className:"reference-label"});
+	        layer.on("click", () => {
+	          if (record.modelId) selectNeighborhood(record.modelId, false);
+	          else {
+	            layer.openTooltip();
+	            showToast(`${record.name}: reference boundary loaded`);
+	          }
+	        });
+	        if (n) {
+	          const entry = neighborhoodMarkers.get(n.id) || {layers:[],label:null,group:null};
+	          entry.layers.push(layer);
+	          neighborhoodMarkers.set(n.id,entry);
+	        }
+	      }
+	    }).addTo(nashMap);
+
+	    neighborhoods.forEach(n => {
+	      const entry = neighborhoodMarkers.get(n.id) || {layers:[],label:null,group:null};
+	      entry.group = L.featureGroup(entry.layers);
+	      entry.label = L.tooltip({permanent:true,direction:"center",className:"map-place-label"})
+	        .setLatLng([n.lat,n.lng])
+	        .setContent(n.name);
+	      neighborhoodMarkers.set(n.id,entry);
+	    });
+	    countyLayer.eachLayer(layer => layer.bringToBack());
+	    boundaryRecords
+	      .filter(record => record.feature.properties?.scale === "macro")
+	      .forEach(record => record.layer.bringToBack());
+	    countyLayer.eachLayer(layer => layer.bringToBack());
+
+    const projectLayers = {
+      eastBank: L.layerGroup([
+        L.polyline([[36.178,-86.779],[36.174,-86.768],[36.171,-86.755]], {color:"#e0a544",weight:4,dashArray:"2 8"}),
+        L.circleMarker([36.174,-86.768], {radius:5,color:"#fff4d9",weight:2,fillColor:"#e0a544",fillOpacity:1})
+      ]),
+      transit: L.layerGroup([
+        L.polyline([[36.256,-86.714],[36.184,-86.738],[36.163,-86.782],[36.132,-86.779],[36.061,-86.672]], {color:"#e0a544",weight:3,dashArray:"9 7"}),
+        L.polyline([[36.165,-86.850],[36.163,-86.782],[36.168,-86.666]], {color:"#e0a544",weight:3,dashArray:"9 7"})
+      ]),
+      greenway: L.layerGroup([
+        L.polyline([[36.194,-86.831],[36.177,-86.807],[36.177,-86.790],[36.163,-86.782],[36.168,-86.666]], {color:"#78b892",weight:3,dashArray:"3 7"})
+      ])
+    };
+    projectLayers.eastBank.addTo(nashMap);
+
+    const contextLayers = {
+      historicBlack: L.layerGroup([
+        L.polygon([[36.225,-86.865],[36.225,-86.815],[36.185,-86.795],[36.165,-86.805],[36.175,-86.855]], {
+          color:"#d2a250",weight:2,dashArray:"5 6",fillColor:"#d2a250",fillOpacity:.08
+        }).bindTooltip("<strong>Bordeaux historic Black community context</strong><br>Illustrative context area based on Metro planning history; not a legal boundary.", {sticky:true,className:"context-label"}),
+        L.polygon([[36.188,-86.827],[36.187,-86.790],[36.158,-86.786],[36.156,-86.815]], {
+          color:"#d2a250",weight:2,dashArray:"5 6",fillColor:"#d2a250",fillOpacity:.1
+        }).bindTooltip("<strong>North Nashville / Jefferson Street context</strong><br>Historic Black cultural, educational, medical, residential, and commercial core.", {sticky:true,className:"context-label"}),
+        L.polyline([[36.169,-86.833],[36.172,-86.814],[36.169,-86.803],[36.168,-86.790]], {
+          color:"#efbd64",weight:4,opacity:.75
+        }).bindTooltip("Jefferson Street cultural spine", {sticky:true,className:"context-label"})
+      ]),
+      anchors: L.layerGroup([
+        L.circleMarker([36.1678,-86.8307],{radius:5,color:"#f4d28c",fillColor:"#d2a250",fillOpacity:1}).bindTooltip("Tennessee State University", {direction:"top",className:"context-label"}),
+        L.circleMarker([36.1688,-86.8047],{radius:5,color:"#f4d28c",fillColor:"#d2a250",fillOpacity:1}).bindTooltip("Fisk University", {direction:"top",className:"context-label"}),
+        L.circleMarker([36.1673,-86.8068],{radius:5,color:"#f4d28c",fillColor:"#d2a250",fillOpacity:1}).bindTooltip("Meharry Medical College", {direction:"top",className:"context-label"}),
+        L.circleMarker([36.1692,-86.7950],{radius:5,color:"#f4d28c",fillColor:"#d2a250",fillOpacity:1}).bindTooltip("Jefferson Street cultural district", {direction:"top",className:"context-label"})
+      ]),
+      interstate: L.layerGroup([
+        L.polyline([[36.181,-86.836],[36.179,-86.820],[36.174,-86.807],[36.169,-86.795],[36.171,-86.781]], {
+          color:"#c75d4d",weight:6,opacity:.72,dashArray:"12 7"
+        }).bindTooltip("<strong>I-40 legacy barrier</strong><br>Metro identifies lasting damage, separation, and isolation from 1960s interstate construction.", {sticky:true,className:"context-label"})
+      ])
+    };
+    const blockLayer = L.layerGroup();
+    const opportunitySiteSets = {
+      bordeaux:[["Clarksville Pike & S Hamilton Rd","Commercial corridor node","Parcel verification needed","Mixed-use infill"],["County Hospital Rd & Hydes Ferry Rd","Large-site node","Parcel verification needed","Housing / neighborhood retail"],["Ashland City Hwy & County Hospital Rd","Gateway intersection","Corridor opportunity","Services / employment"]],
+      madison:[["Gallatin Pike & Old Hickory Blvd","Major corridor center","Corridor plan opportunity","Mixed-use / transit"],["Myatt Dr & Anderson Ln","Underused commercial node","Parcel verification needed","Employment / housing"],["Madison Station Blvd & Gallatin Pike","Transit node","Public infrastructure catalyst","Transit-oriented infill"]],
+      east:[["Gallatin Pike & Eastland Ave","Commercial intersection","Active district","Mixed-use infill"],["Gallatin Pike & Trinity Ln","Gateway node","Parcel verification needed","Housing / retail"]],
+      donelson:[["Lebanon Pike & Donelson Pike","Town-center intersection","Active district","Mixed-use infill"],["Donelson Station, 2705 Lebanon Pike","Commuter-rail node","Transit catalyst","Transit-oriented housing"]],
+      germantown:[["Jefferson St & 5th Ave N","Urban infill node","Active district","Mixed-use infill"],["Rosa L Parks Blvd & Jefferson St","Gateway intersection","Parcel verification needed","Urban mixed use"]],
+      downtown:[["James Robertson Pkwy & 3rd Ave N","Urban infill node","Parcel verification needed","Office / housing"],["Korean Veterans Blvd & 4th Ave S","High-access node","Active district","Mixed-use infill"]],
+      north:[["Jefferson St & 28th Ave N","Commercial corridor node","Community partnership required","Local retail / housing"],["Buchanan St & DB Todd Jr Blvd","Neighborhood center","Community partnership required","Services / mixed use"],["Jefferson St & 21st Ave N","Institutional node","Community partnership required","Institutional / retail"]],
+      nations:[["51st Ave N & Centennial Blvd","Industrial-transition node","Active district","Mixed use"],["Charlotte Pike & 46th Ave N","Corridor intersection","Parcel verification needed","Housing / retail"]],
+      sylvan:[["Charlotte Pike & Murphy Rd","Commercial node","Mature market","Selective infill"],["46th Ave N & Utah Ave","Neighborhood node","Limited capacity","Small-scale infill"]],
+      edgehill:[["12th Ave S & Wedgewood Ave","High-access node","Community partnership required","Mixed-use / services"],["8th Ave S & Edgehill Ave","Commercial node","Parcel verification needed","Housing / retail"]],
+      weho:[["4th Ave S & Chestnut St","Creative-district node","Active district","Mixed-use infill"],["Nolensville Pike & Wedgewood Ave","Gateway intersection","Parcel verification needed","Housing / commercial"]],
+      antioch:[["5252 Hickory Hollow Pkwy","Public master-plan site","Metro-led redevelopment","Arts / innovation / housing"],["Bell Rd & Hickory Hollow Pkwy","Regional transit node","Public plan opportunity","Transit-oriented mixed use"],["Murfreesboro Pike & Bell Rd","High-ridership corridor","Corridor opportunity","Retail / housing"]],
+      inglewood:[["Gallatin Pike & McGavock Pike","Commercial center","Parcel verification needed","Mixed use"],["Gallatin Pike & Broadmoor Dr","Corridor node","Parcel verification needed","Housing / services"]],
+      clevelandpark:[["Dickerson Pike & Cleveland St","Commercial node","Active corridor","Mixed-use infill"],["Douglas Ave & Dickerson Pike","Gateway intersection","Parcel verification needed","Housing / retail"]],
+      dickerson:[["Dickerson Pike & Trinity Ln","Major redevelopment node","Adopted corridor study","Mixed use / employment"],["Dickerson Pike & Broadmoor Dr","Commercial corridor node","Adopted corridor study","Housing / services"]],
+      oldhickory:[["Old Hickory Blvd & Hadley Ave","Village center","Parcel verification needed","Village mixed use"],["Robinson Rd & Old Hickory Blvd","Commercial node","Parcel verification needed","Retail / housing"]],
+      goodlettsville:[["Rivergate Pkwy & Gallatin Pike","Regional retail node","Parcel verification needed","Retail repositioning"],["Main St & Rivergate Pkwy","Gateway intersection","Corridor opportunity","Mixed use"]],
+      whitescreek:[["Whites Creek Pike & Old Hickory Blvd","Rural gateway","Parcel verification needed","Services / housing"],["Whites Creek Pike & Green Ln","Corridor node","Conservation review needed","Small-scale mixed use"]],
+      charlottepark:[["Charlotte Pike & Annex Ave","Commercial node","Parcel verification needed","Mixed use"],["Charlotte Pike & White Bridge Pike","Major intersection","Corridor opportunity","Housing / retail"]],
+      westmeade:[["Charlotte Pike & Davidson Dr","Commercial intersection","Mature market","Selective infill"],["Highway 100 & Old Hickory Blvd","Regional node","Parcel verification needed","Services / retail"]],
+      bellevue:[["Highway 70 S & Old Hickory Blvd","Regional center","Active district","Mixed use"],["Highway 100 & Temple Rd","Corridor node","Flood review needed","Housing / services"]],
+      greenhills:[["Hillsboro Pike & Abbott Martin Rd","Regional retail node","Mature market","Selective redevelopment"],["Hillsboro Pike & Richard Jones Rd","Commercial center","Limited capacity","Mixed use"]],
+      hillsboro:[["21st Ave S & Acklen Ave","Walkable center","Mature market","Selective infill"],["Blakemore Ave & 24th Ave S","Institutional edge","Parcel verification needed","Housing / services"]],
+      midtown:[["West End Ave & 21st Ave N","Employment node","Active district","Mixed use"],["Church St & 18th Ave N","Urban infill node","Parcel verification needed","Housing / office"]],
+      musicrow:[["16th Ave S & Music Square E","Creative-economy node","Preservation review needed","Creative office / infill"],["Demonbreun St & Music Circle E","Commercial node","Active district","Mixed use"]],
+      twelvesouth:[["12th Ave S & Kirkwood Ave","Neighborhood retail node","Mature market","Selective infill"],["12th Ave S & Wedgewood Ave","Gateway intersection","Limited capacity","Mixed use"]],
+      berryhill:[["Bransford Ave & Thompson Ln","Commercial node","Parcel verification needed","Creative office / housing"],["8th Ave S & Melpark Dr","Gateway node","Active district","Mixed-use infill"]],
+      woodbine:[["Nolensville Pike & Thompson Ln","Major intersection","Corridor opportunity","Mixed use / services"],["Nolensville Pike & Wingate Ave","Commercial node","Parcel verification needed","Housing / retail"]],
+      nolensville:[["Nolensville Pike & Harding Pl","High-ridership node","Corridor opportunity","Transit-oriented mixed use"],["Nolensville Pike & Elysian Fields Rd","Commercial node","Parcel verification needed","Retail / housing"]],
+      glencliff:[["Nolensville Pike & Antioch Pike","Commercial intersection","Corridor opportunity","Mixed use"],["Thompson Ln & Foster Ave","Gateway node","Parcel verification needed","Housing / services"]],
+      crievehall:[["Nolensville Pike & Hogan Rd","Commercial node","Parcel verification needed","Neighborhood services"],["Edmondson Pike & Harding Pl","Major intersection","Selective opportunity","Housing / retail"]],
+      caneRidge:[["Murfreesboro Pike & Old Hickory Blvd","Regional intersection","Infrastructure review needed","Mixed use / services"],["Cane Ridge Rd & Battle Rd","Growth-area node","Parcel verification needed","Housing / services"]],
+      priestlake:[["Murfreesboro Pike & Bell Rd","Regional corridor node","Corridor opportunity","Mixed use"],["Bell Rd & Smith Springs Rd","Commercial intersection","Parcel verification needed","Housing / retail"]],
+      hermitage:[["Lebanon Pike & Old Hickory Blvd","Regional center","Corridor opportunity","Mixed use"],["Hermitage Station, 4121 Andrew Jackson Pkwy","Commuter-rail node","Transit catalyst","Transit-oriented housing"]],
+      eastbank:[["1 Titans Way","Public redevelopment district","Metro-led redevelopment","Mixed-use district"],["S 1st St & Woodland St","Riverfront gateway","Public plan opportunity","Housing / public realm"]],
+      sobro:[["Lafayette St & 4th Ave S","Urban infill node","Parcel verification needed","Housing / commercial"],["Korean Veterans Blvd & 8th Ave S","Gateway intersection","Active district","Mixed use"]]
+    };
+
+    function blockSignals(n) {
+      const sites = opportunitySiteSets[n.id] || [[`${n.name}, Nashville, TN`,"Area-level signal","Address research needed","Site identification"]];
+      return sites.map((site,i) => {
+        const angle = (i/sites.length)*Math.PI*2 + .35;
+        const distance = .0045 + (i%2)*.002;
+        const pressure = clamp(n.taxPressure + (i-1.5)*6);
+        const ownership = clamp(n.blackOwnership + (1.5-i)*5);
+        const capacity = clamp(n.vacancy*5.2 + i*4);
+        const score = clamp(n.opportunity - pressure*.08 - n.flood*.035 - n.heat*.025 + capacity*.18 + n.jobs*.035);
+        return {id:`${n.id}-${i}`,name:site[0],type:site[1],status:site[2],use:site[3],lat:n.lat+Math.sin(angle)*distance,lng:n.lng+Math.cos(angle)*distance,pressure,ownership,capacity,score,permit:clamp(n.permitVelocity+(i-1.5)*7)};
+      });
+    }
+
+    [
+      ["Clarksville Pike", [[36.220,-86.855],[36.194,-86.831],[36.177,-86.807]]],
+      ["Gallatin Pike", [[36.256,-86.714],[36.218,-86.724],[36.184,-86.738]]],
+      ["Murfreesboro Pike", [[36.163,-86.782],[36.119,-86.728],[36.061,-86.672]]]
+    ].forEach(([name,coords]) => {
+      L.polyline(coords,{color:"#99a39d",weight:1.2,opacity:.52,dashArray:"1 7"})
+        .bindTooltip(name,{sticky:true,className:"corridor-label"}).addTo(nashMap);
+    });
+
+    function clamp(v, min=0, max=100) { return Math.max(min, Math.min(max, v)); }
+    function scenarioBoost(n) {
+      let boost = 0;
+      if (state.scenarios.eastBank && ["east","downtown","north"].includes(n.id)) boost += 5;
+      if (state.scenarios.transit && ["antioch","madison","donelson","edgehill","weho"].includes(n.id)) boost += 7;
+      if (state.scenarios.greenway && ["bordeaux","nations","north","donelson"].includes(n.id)) boost += 4;
+      return boost;
+    }
+    function responsibleScore(n, year = state.year) {
+      const delta = year - 2026;
+      const scenario = year > 2026 && state.forecast ? scenarioBoost(n) * ((year - 2026) / 9) : 0;
+      const rawUpside = n.opportunity + delta * (n.forecast / 30) + scenario;
+      const executionRisk = n.displacement*.055 + n.taxPressure*.045 + n.flood*.025 + n.heat*.018 + (n.heritage ? n.continuity*.025 : 0);
+      const residentValue = n.affordability*.035 + n.jobs*.025 + n.commute*.02;
+      return clamp(rawUpside - executionRisk + residentValue);
+    }
+    function valueAt(n, metric = state.metric, year = state.year) {
+      const delta = year - 2026;
+      const scenario = year > 2026 && state.forecast ? scenarioBoost(n) * ((year - 2026) / 9) : 0;
+      if (metric === "homeValue") return Math.max(55, n.price * Math.pow(1 + n.growth / 100, delta));
+      if (metric === "income") return Math.max(22, n.income * Math.pow(1.018, delta));
+      if (metric === "opportunity") return responsibleScore(n,year);
+      if (metric === "rawUpside") return clamp(n.opportunity + delta*(n.forecast/30) + scenario);
+      if (metric === "affordability") return clamp(n.affordability - Math.max(0,delta)*n.growth*.45);
+      if (metric === "jobs") return clamp(n.jobs + scenario*.45);
+      if (metric === "commute") return clamp(n.commute + (state.scenarios.transit ? 8 : 0));
+      if (metric === "schools") return clamp(n.schools);
+      if (metric === "safety") return clamp(n.safety);
+      if (metric === "parks") return clamp(n.parks);
+      if (metric === "flood") return clamp(n.flood);
+      if (metric === "heat") return clamp(n.heat + Math.max(0,delta)*.35);
+      if (metric === "diversity") return clamp(n.diversity - Math.max(0, delta) * n.displacement / 180 + Math.min(0, delta) * -.12);
+      if (metric === "displacement") return clamp(n.displacement + delta * (n.momentum / 160) + scenario * .4);
+      if (metric === "vacancy") return Math.max(1.5, n.vacancy - delta * .12 - scenario * .08);
+      if (metric === "continuity") return clamp(n.continuity - Math.max(0,delta)*n.displacement/250);
+      if (metric === "blackOwnership") return clamp(n.blackOwnership - Math.max(0,delta)*n.taxPressure/300);
+      if (metric === "taxPressure") return clamp(n.taxPressure + delta*n.growth/8 + scenario*.3);
+      if (metric === "permitVelocity") return clamp(n.permitVelocity + scenario);
+      if (metric === "rentBurden") return clamp(n.rentBurden + Math.max(0,delta)*n.displacement/350);
+      return 0;
+    }
+    function normalize(metric, value) {
+      const ranges = {
+        opportunity:[25,95], rawUpside:[25,95], homeValue:[120,750], income:[35,125],
+        affordability:[15,95], jobs:[20,98], commute:[20,98], schools:[25,92], safety:[30,90], parks:[25,95], flood:[20,90], heat:[20,90],
+        diversity:[35,95], displacement:[25,95], vacancy:[2,16],
+        continuity:[25,100], blackOwnership:[5,70], taxPressure:[30,100], permitVelocity:[25,100], rentBurden:[25,60]
+      };
+      const [min,max] = ranges[metric];
+      return clamp((value-min)/(max-min)*100);
+    }
+    function colorFor(metric, value) {
+      const score = normalize(metric, value);
+      const palette = metricMeta[metric].palette;
+      return palette[Math.min(palette.length-1, Math.floor(score / 20))];
+    }
+	    function money(v) { return "$" + Math.round(v) + "K"; }
+	    function selectedNeighborhood() { return neighborhoods.find(n => n.id === state.selected); }
+	    function ranking() { return [...neighborhoods].sort((a,b)=>valueAt(b,"opportunity")-valueAt(a,"opportunity")); }
+	    function opportunityCase(n) {
+	      const drivers = [
+	        {
+	          strength:clamp(n.vacancy/16*100),
+	          title:"Underutilized capacity",
+	          value:n.vacancy.toFixed(1)+"%",
+	          text:`${n.vacancy.toFixed(1)}% modeled underutilization creates room for infill, reuse, or parcel assembly.`
+	        },
+	        {
+	          strength:n.transit,
+	          title:"Infrastructure access",
+	          value:Math.round(n.transit)+"/100",
+	          text:`Infrastructure access of ${Math.round(n.transit)}/100 expands the reachable resident, worker, and customer base.`
+	        },
+	        {
+	          strength:n.momentum,
+	          title:"Market momentum",
+	          value:Math.round(n.momentum)+"/100",
+	          text:`Market momentum of ${Math.round(n.momentum)}/100 suggests demand is already forming rather than purely speculative.`
+	        },
+	        {
+	          strength:n.affordability,
+	          title:"Relative affordability",
+	          value:Math.round(n.affordability)+"/100",
+	          text:`Relative affordability of ${Math.round(n.affordability)}/100 leaves more room for value creation than mature high-basis areas.`
+	        },
+	        {
+	          strength:n.jobs,
+	          title:"Job access",
+	          value:Math.round(n.jobs)+"/100",
+	          text:`Job access of ${Math.round(n.jobs)}/100 supports durable housing, retail, and service demand.`
+	        },
+	        {
+	          strength:clamp(n.forecast*3.6),
+	          title:"2035 modeled upside",
+	          value:"+"+Math.round(n.forecast)+"%",
+	          text:`The baseline model projects +${Math.round(n.forecast)}% upside to 2035 before scenario adjustments.`
+	        },
+	        {
+	          strength:n.permitVelocity,
+	          title:"Permit velocity",
+	          value:Math.round(n.permitVelocity)+"/100",
+	          text:`Permit velocity of ${Math.round(n.permitVelocity)}/100 confirms that investment and redevelopment activity are moving.`
+	        }
+	      ].sort((a,b)=>b.strength-a.strength).slice(0,3);
+	      const risks = [
+	        {strength:n.displacement,title:"Displacement risk",value:Math.round(n.displacement)+"/100",text:`Displacement risk is ${Math.round(n.displacement)}/100; execution should protect existing residents and occupied housing.`},
+	        {strength:n.taxPressure,title:"Property-tax pressure",value:Math.round(n.taxPressure)+"/100",text:`Property-tax pressure is ${Math.round(n.taxPressure)}/100; owner stability and tax exposure require diligence.`},
+	        {strength:n.flood,title:"Flood exposure",value:Math.round(n.flood)+"/100",text:`Flood exposure is ${Math.round(n.flood)}/100; parcel-level drainage and insurance checks are essential.`},
+	        {strength:n.heat,title:"Heat exposure",value:Math.round(n.heat)+"/100",text:`Heat exposure is ${Math.round(n.heat)}/100; shade, materials, and resilience affect long-term operating value.`}
+	      ].sort((a,b)=>b.strength-a.strength);
+	      const risk = risks[0];
+	      return {
+	        drivers,
+	        risk,
+	        short:`${drivers[0].value} ${drivers[0].title.toLowerCase()} plus ${drivers[1].value} ${drivers[1].title.toLowerCase()} support the case; ${risk.title.toLowerCase()} is ${risk.value}.`,
+	        summary:`${drivers.map(driver=>driver.text).join(" ")}`
+	      };
+	    }
+
+	    function renderMap() {
+	      const search = state.search || "";
+	      boundaryRecords.forEach(record => {
+	        const n = record.modelId ? modelById.get(record.modelId) : null;
+	        const selected = n?.id === state.selected;
+	        const matchesSearch = !search ||
+	          boundaryKey(record.name).includes(search) ||
+	          (n && (boundaryKey(n.name).includes(search) || boundaryKey(n.region).includes(search)));
+	        record.layer.setStyle(baseReferenceStyle(record,n,selected,matchesSearch));
+	        if (n) {
+	          const value = valueAt(n);
+	          record.layer.setTooltipContent(`<strong>${record.name}</strong>${n.name} model · ${metricMeta[state.metric].format(value)}`);
+	        } else {
+	          record.layer.setTooltipContent(`<strong>${record.name}</strong>Reference boundary · no modeled score`);
+	        }
+	        if (selected) record.layer.bringToFront();
+	      });
+	      const selectedLayers = neighborhoodMarkers.get(state.selected);
+	      selectedLayers.layers.forEach(layer => layer.bringToFront());
+	      neighborhoods.forEach(n => {
+	        const entry = neighborhoodMarkers.get(n.id);
+	        const selected = n.id === state.selected;
+	        const shouldLabel = selected || valueAt(n,"opportunity") >= 84;
+	        if (shouldLabel && !nashMap.hasLayer(entry.label)) entry.label.addTo(nashMap);
+	        if (!shouldLabel && nashMap.hasLayer(entry.label)) nashMap.removeLayer(entry.label);
+	      });
+	      const top = ranking()[0];
+	      document.getElementById("top-signal").textContent = top.name;
+	      document.getElementById("area-count").textContent = `${neighborhoods.length} modeled · ${referenceBoundaries.features.length} refs`;
+	      document.getElementById("map-area-count").textContent = `${neighborhoods.length} / ${referenceBoundaries.features.length}`;
+	      document.getElementById("rank-list").innerHTML = ranking().map((n,i)=>`
+	        <button class="rank-item" data-rank-id="${n.id}">
+	          <span class="rank-num">${String(i+1).padStart(2,"0")}</span>
+	          <span><span class="rank-name">${n.name}</span><span class="rank-note">Lead node: ${blockSignals(n)[0].name}</span><span class="rank-reason">${opportunityCase(n).short}</span><span class="rank-thesis ${n.heritage ? "protect" : ""}">${n.thesis}</span></span>
+	          <span class="rank-score">${Math.round(valueAt(n,"opportunity"))}</span>
+	        </button>`).join("");
+      renderLegend();
+    }
+
+    function renderLegend() {
+      const meta = metricMeta[state.metric];
+      document.getElementById("legend-name").textContent = meta.label;
+      document.getElementById("metric-label").textContent = meta.label.replace(" index","");
+      document.getElementById("legend-scale").innerHTML = meta.palette.map(c=>`<i style="background:${c}"></i>`).join("");
+    }
+
+    function renderYear() {
+      document.getElementById("year-number").textContent = state.year;
+      document.getElementById("year-slider").value = state.year;
+      const status = document.getElementById("year-status");
+      const sub = document.getElementById("year-sub");
+      if (state.year < 2026) { status.textContent = "History"; sub.textContent = "Modeled historical neighborhood conditions"; }
+      else if (state.year === 2026) { status.textContent = "Now"; sub.textContent = "Modeled present-day neighborhood signals"; }
+      else { status.textContent = "Forecast"; sub.textContent = state.forecast ? "Scenario-adjusted outlook" : "Baseline trend outlook"; }
+      renderDetail();
+    }
+
+    function renderDetail() {
+      const n = selectedNeighborhood();
+      const opp = valueAt(n,"opportunity");
+      const risk = valueAt(n,"displacement");
+      const price = valueAt(n,"homeValue");
+      const income = valueAt(n,"income");
+      const vacancy = valueAt(n,"vacancy");
+      const boost = scenarioBoost(n);
+      document.getElementById("detail-eyebrow").textContent = `${n.thesis} · ${n.region}`;
+      document.getElementById("detail-name").textContent = n.name;
+      document.getElementById("detail-summary").textContent = `${n.summary} ${n.reason}`;
+      document.getElementById("detail-score").textContent = Math.round(opp);
+      document.getElementById("snapshot-title").textContent = `${state.year} snapshot`;
+      document.getElementById("forecast-change").textContent = `+${Math.round(n.forecast + boost)}% to 2035`;
+      document.getElementById("home-value").textContent = money(price);
+      document.getElementById("income-value").textContent = money(income);
+      document.getElementById("vacancy-value").textContent = vacancy.toFixed(1)+"%";
+      document.getElementById("risk-value").textContent = Math.round(risk);
+      document.getElementById("affordability-value").textContent = Math.round(valueAt(n,"affordability"));
+      document.getElementById("jobs-value").textContent = Math.round(valueAt(n,"jobs"));
+      document.getElementById("tax-value").textContent = Math.round(valueAt(n,"taxPressure"));
+      document.getElementById("permit-value").textContent = Math.round(valueAt(n,"permitVelocity"));
+      document.getElementById("commute-value").textContent = Math.round(valueAt(n,"commute"));
+      document.getElementById("schools-value").textContent = Math.round(valueAt(n,"schools"));
+      document.getElementById("flood-value").textContent = Math.round(valueAt(n,"flood"));
+      document.getElementById("heat-value").textContent = Math.round(valueAt(n,"heat"));
+      document.getElementById("raw-value").textContent = Math.round(valueAt(n,"rawUpside"));
+      document.getElementById("rent-value").textContent = Math.round(valueAt(n,"rentBurden"))+"%";
+      document.getElementById("home-change").textContent = `+${(n.growth*3.1).toFixed(1)}% modeled YoY`;
+      document.getElementById("income-change").textContent = `+${(1.8 + n.momentum/80).toFixed(1)}% modeled YoY`;
+      document.getElementById("risk-change").textContent = risk > 75 ? "Very high vigilance" : risk > 55 ? "High vigilance" : "Moderate vigilance";
+      const transit = clamp(n.transit + (state.scenarios.transit ? 8 : 0));
+      const momentum = clamp(n.momentum + boost);
+	      [["transit",transit],["momentum",momentum],["pressure",risk]].forEach(([id,val])=>{
+	        document.getElementById(id+"-label").textContent = Math.round(val);
+	        document.getElementById(id+"-bar").style.width = val+"%";
+	      });
+	      const explanation = opportunityCase(n);
+	      document.getElementById("opportunity-case").innerHTML = `
+	        <strong>${Math.round(opp)}/100 opportunity score</strong>
+	        <span>${explanation.summary}</span>
+	        <div class="driver-list">${explanation.drivers.map((driver,i)=>`
+	          <div class="driver"><b>${i+1}</b><span><strong>${driver.title} · ${driver.value}</strong><br>${driver.text}</span></div>
+	        `).join("")}</div>
+	        <div class="driver-risk"><strong>Primary execution risk:</strong> ${explanation.risk.text}</div>`;
+	      const catalystItems = [...n.catalysts];
+      if (boost > 0) catalystItems.unshift(["Scenario-adjusted upside", `+${boost} pts`]);
+      document.getElementById("catalyst-count").textContent = catalystItems.length+" signals";
+      document.getElementById("catalyst-list").innerHTML = catalystItems.map(c=>`<div class="catalyst"><i></i><span>${c[0]}</span><b>${c[1]}</b></div>`).join("");
+      document.getElementById("watch-btn").classList.toggle("active", state.watchlist.has(n.id));
+      document.getElementById("watch-btn").textContent = state.watchlist.has(n.id) ? "✓ Watching" : "＋ Watchlist";
+      document.getElementById("drill-btn").classList.toggle("active", state.blocks);
+      document.getElementById("drill-btn").textContent = state.blocks ? "⌖ Exit sites" : "⌖ Sites";
+      renderBlockList();
+      if (state.compare) renderCompare();
+    }
+
+    function renderCompare() {
+      const current = selectedNeighborhood();
+      const peers = ranking().filter(n=>n.id!==current.id).slice(0,2);
+      document.getElementById("compare-grid").innerHTML = [current,...peers].map(n=>`
+        <div class="compare-cell">${n.name}
+          <strong>${Math.round(valueAt(n,"opportunity"))}</strong>
+          Opportunity · ${valueAt(n,"vacancy").toFixed(1)}% capacity
+        </div>`).join("");
+    }
+
+    function renderScenarios() {
+      const count = Object.values(state.scenarios).filter(Boolean).length;
+      document.getElementById("scenario-count").textContent = count + (count === 1 ? " active" : " active");
+      Object.entries(state.scenarios).forEach(([key,on]) => {
+        document.querySelector(`[data-scenario="${key}"]`).classList.toggle("on", on);
+        if (on && !nashMap.hasLayer(projectLayers[key])) projectLayers[key].addTo(nashMap);
+        if (!on && nashMap.hasLayer(projectLayers[key])) nashMap.removeLayer(projectLayers[key]);
+      });
+      renderMap(); renderDetail();
+    }
+
+    function renderContext() {
+      Object.entries(state.context).forEach(([key,on]) => {
+        document.querySelector(`[data-context="${key}"]`).classList.toggle("on",on);
+        if (on && !nashMap.hasLayer(contextLayers[key])) contextLayers[key].addTo(nashMap);
+        if (!on && nashMap.hasLayer(contextLayers[key])) nashMap.removeLayer(contextLayers[key]);
+      });
+    }
+
+    function renderBlockList() {
+      const n = selectedNeighborhood();
+      const blocks = blockSignals(n);
+      document.getElementById("block-status").textContent = state.blocks ? `${blocks.length} mapped nodes` : `${blocks.length} opportunities`;
+      document.getElementById("block-list").innerHTML = blocks.map(b=>`
+        <button class="block-item ${state.selectedBlock===b.id ? "active" : ""}" data-block-id="${b.id}">
+          <span><strong>${b.name}</strong><span>${b.type} · ${b.use}<br>${b.status}</span></span>
+          <span class="block-score">${Math.round(b.score)}</span>
+        </button>`).join("");
+    }
+
+    function renderBlocks(focus = true) {
+      blockLayer.clearLayers();
+      if (!state.blocks) {
+        if (nashMap.hasLayer(blockLayer)) nashMap.removeLayer(blockLayer);
+        return;
+      }
+      const n = selectedNeighborhood();
+      blockSignals(n).forEach((b,i) => {
+        const site = L.circleMarker([b.lat,b.lng], {
+          radius: state.selectedBlock===b.id ? 10 : 7,
+          color: state.selectedBlock===b.id ? "#f5c363" : "#d7a64c",
+          weight: state.selectedBlock===b.id ? 3 : 1.5,
+          fillColor: colorFor("opportunity",b.score),
+          fillOpacity:.92
+        }).bindTooltip(`<strong>${b.name}</strong><br>${b.type}<br>${b.use}<br>${b.status}`, {sticky:true,className:"block-label"});
+        site.on("click",()=>{state.selectedBlock=b.id; renderBlocks(false); renderBlockList();});
+        blockLayer.addLayer(site);
+      });
+      if (!nashMap.hasLayer(blockLayer)) blockLayer.addTo(nashMap);
+      if (focus) nashMap.flyTo([n.lat,n.lng],14,{duration:.6});
+    }
+
+	    function selectNeighborhood(id, focus = false) {
+	      state.selected = id;
+	      state.selectedBlock = null;
+	      if (focus) {
+	        const n = selectedNeighborhood();
+	        const layers = neighborhoodMarkers.get(n.id);
+	        if (layers.group.getLayers().length && layers.group.getBounds().isValid()) {
+	          nashMap.fitBounds(layers.group.getBounds(), {padding:[55,55],maxZoom:13});
+	        } else {
+	          nashMap.flyTo([n.lat,n.lng],13,{duration:.6});
+	        }
+	      }
+	      renderMap(); renderDetail(); renderBlocks(false);
+	    }
+
+    document.getElementById("year-slider").addEventListener("input", e => {
+      state.year = +e.target.value;
+      renderYear(); renderMap();
+    });
+    document.querySelectorAll(".metric-btn").forEach(btn=>btn.addEventListener("click",()=>{
+      state.metric = btn.dataset.metric;
+      document.querySelectorAll(".metric-btn").forEach(b=>b.classList.toggle("active",b===btn));
+      renderMap();
+    }));
+    document.querySelectorAll(".mode-btn").forEach(btn=>btn.addEventListener("click",()=>{
+      state.mode = btn.dataset.mode;
+      document.querySelectorAll(".mode-btn").forEach(b=>b.classList.toggle("active",b===btn));
+      if (state.mode === "resident") state.metric = "displacement";
+      if (state.mode === "investor") state.metric = "opportunity";
+      if (state.mode === "planner") state.metric = "vacancy";
+      document.querySelectorAll(".metric-btn").forEach(b=>b.classList.toggle("active",b.dataset.metric===state.metric));
+      renderMap();
+      showToast(`${btn.textContent} view activated`);
+    }));
+    document.querySelectorAll(".switch[data-scenario]").forEach(btn=>btn.addEventListener("click",()=>{
+      state.scenarios[btn.dataset.scenario] = !state.scenarios[btn.dataset.scenario];
+      renderScenarios();
+    }));
+    document.querySelectorAll(".switch[data-context]").forEach(btn=>btn.addEventListener("click",()=>{
+      state.context[btn.dataset.context] = !state.context[btn.dataset.context];
+      renderContext();
+	    }));
+	    document.getElementById("search").addEventListener("input", e=>{
+	      const q = boundaryKey(e.target.value);
+	      state.search = q;
+	      renderMap();
+	      const exact = neighborhoods.find(n=>boundaryKey(n.name)===q);
+	      if (exact) selectNeighborhood(exact.id, true);
+	      else if (q) {
+	        const reference = boundaryRecords.find(record=>boundaryKey(record.name)===q);
+	        if (reference && reference.layer.getBounds().isValid()) {
+	          nashMap.fitBounds(reference.layer.getBounds(), {padding:[55,55],maxZoom:14});
+	          reference.layer.openTooltip();
+	        }
+	      }
+	    });
+    document.getElementById("watch-btn").addEventListener("click",()=>{
+      const n = selectedNeighborhood();
+      state.watchlist.has(n.id) ? state.watchlist.delete(n.id) : state.watchlist.add(n.id);
+      renderDetail();
+      showToast(state.watchlist.has(n.id) ? `${n.name} added to watchlist` : `${n.name} removed from watchlist`);
+    });
+    document.getElementById("compare-btn").addEventListener("click",()=>{
+      state.compare = !state.compare;
+      document.getElementById("compare-tray").classList.toggle("show",state.compare);
+      renderCompare();
+    });
+    document.getElementById("close-compare").addEventListener("click",()=>{
+      state.compare=false; document.getElementById("compare-tray").classList.remove("show");
+    });
+    document.getElementById("drill-btn").addEventListener("click",()=>{
+      state.blocks=!state.blocks;
+      state.selectedBlock=null;
+      renderBlocks(true); renderDetail();
+    });
+    document.getElementById("block-list").addEventListener("click",e=>{
+      const item=e.target.closest("[data-block-id]");
+      if (!item) return;
+      state.blocks=true; state.selectedBlock=item.dataset.blockId;
+      renderBlocks(true); renderDetail();
+    });
+    document.getElementById("zoom-in").addEventListener("click",()=>nashMap.zoomIn());
+    document.getElementById("zoom-out").addEventListener("click",()=>nashMap.zoomOut());
+	    document.getElementById("reset-map").addEventListener("click",()=>nashMap.flyTo([36.155,-86.76],9,{duration:.6}));
+    document.getElementById("forecast-btn").addEventListener("click",e=>{
+      state.forecast=!state.forecast; e.target.classList.toggle("active",state.forecast); e.target.textContent=state.forecast?"Forecast on":"Forecast off"; renderYear(); renderMap();
+    });
+    document.getElementById("rank-list").addEventListener("click",e=>{
+      const item=e.target.closest("[data-rank-id]"); if(item) selectNeighborhood(item.dataset.rankId, true);
+    });
+
+    let playTimer;
+    document.getElementById("play-btn").addEventListener("click",e=>{
+      state.playing=!state.playing;
+      e.target.classList.toggle("active",state.playing);
+      e.target.textContent=state.playing?"Ⅱ Pause":"▶ Play";
+      clearInterval(playTimer);
+      if(state.playing) playTimer=setInterval(()=>{
+        state.year = state.year >= 2035 ? 1980 : state.year+1;
+        renderYear(); renderMap();
+      },350);
+    });
+    document.getElementById("model-notes").addEventListener("click",()=>document.getElementById("modal-backdrop").classList.add("show"));
+    document.getElementById("close-modal").addEventListener("click",()=>document.getElementById("modal-backdrop").classList.remove("show"));
+    document.getElementById("modal-backdrop").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove("show")});
+    document.getElementById("export-btn").addEventListener("click",()=>{
+      const n=selectedNeighborhood();
+      const text=`NASH / SHIFT — ${n.name} responsible investment brief\\n\\nResponsible opportunity: ${Math.round(valueAt(n,"opportunity"))}\\nRaw market upside: ${Math.round(valueAt(n,"rawUpside"))}\\nThesis: ${n.thesis}\\nMedian home value (${state.year}): ${money(valueAt(n,"homeValue"))}\\nUnderutilized land: ${valueAt(n,"vacancy").toFixed(1)}%\\nDisplacement risk: ${Math.round(valueAt(n,"displacement"))}\\nCommunity continuity: ${Math.round(valueAt(n,"continuity"))}\\nBlack homeownership estimate: ${Math.round(valueAt(n,"blackOwnership"))}%\\nProperty-tax pressure: ${Math.round(valueAt(n,"taxPressure"))}\\n\\nWhy: ${n.reason}\\n\\nIllustrative modeled values with source-backed community context. Not investment advice.`;
+      const blob=new Blob([text],{type:"text/plain"});
+      const link=document.createElement("a"); link.href=URL.createObjectURL(blob); link.download=`${n.id}-opportunity-brief.txt`; link.click(); URL.revokeObjectURL(link.href);
+      showToast("Neighborhood brief exported");
+    });
+    function showToast(message){
+      const toast=document.getElementById("toast"); toast.textContent=message; toast.classList.add("show");
+      clearTimeout(showToast.timer); showToast.timer=setTimeout(()=>toast.classList.remove("show"),1800);
+    }
+
+    renderScenarios();
+    renderContext();
+    renderYear();
+  </script>
+</body>
+</html>
