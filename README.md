@@ -96,13 +96,7 @@ Address-level opportunity nodes are analytical starting points. Before making a 
 
 ## Deployment
 
-Pushes to `main` automatically deploy the static application through GitHub Pages using [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
-
-The expected live URL is:
-
-```text
-https://ashbybrewer.github.io/nashville-time-machine/
-```
+Pushes to `main` deploy automatically to the [live site](https://ashbybrewer.github.io/nashville-time-machine/) via [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
 
 ## License
 
